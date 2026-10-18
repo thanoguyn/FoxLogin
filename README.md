@@ -218,6 +218,7 @@ FoxLogin also ships as a desktop app: a native window, no Python needed.
 | Windows x64, also Windows 11 ARM via emulation | `FoxLogin-<ver>-windows-x64-setup.exe` |
 | Linux x86_64 / arm64 | `FoxLogin-<ver>-linux-<arch>.AppImage` (+ `.tar.gz`) |
 
+- **Minimum systems.** macOS 11 (Big Sur) or later on both Apple Silicon and Intel; Windows 10/11 x64; Linux with glibc 2.28 or later (Ubuntu 20.04+, Debian 11+, RHEL 8+).
 - **Builds.** GitHub Actions (`.github/workflows/build.yml`) builds every installer on each push. Pushing a tag like `v1.0.0` publishes them as a GitHub Release.
 - **Local build.** Run `python3 packaging/build.py [--arch arm64|x86_64]`. On an Apple Silicon Mac with Rosetta, both macOS builds can be made locally.
 - **First launch.** The app downloads the Camoufox core, about 1.2 GB (one-time).

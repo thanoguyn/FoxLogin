@@ -24,7 +24,12 @@ Mục tiêu: người dùng tải một file cài đặt, cài xong mở như ap
   - Chạy và dừng profile được.
   - Runner không hiện icon trên Dock.
 - Bản Intel build qua Rosetta.
-- Windows và Linux mới chỉ được build và smoke test trên CI, chưa chạy thử trên máy thật.
+- GitHub Actions build xanh cả 5 bản. Windows và Linux mới qua smoke test trên CI (server khởi động, tạo profile), chưa chạy thử trên máy thật.
+
+Hệ điều hành tối thiểu:
+- **macOS 11:** pip bị ép chọn các package build cho macOS 11. `indexed_zstd` được tự build kèm zstd nhúng tĩnh. Driver Playwright dùng Node 22 vì Node 24 đòi macOS 13.5.
+- **Windows 10/11 x64:** Windows 11 ARM chạy bản x64 qua giả lập.
+- **Linux glibc 2.28:** dùng Qt WebEngine 6.7.
 
 Chưa làm: ký số và notarize (cần chứng thư), overlay số profile trên taskbar Windows, icon trên khay hệ thống, auto-update.
 
