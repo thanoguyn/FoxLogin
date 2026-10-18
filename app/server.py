@@ -214,6 +214,12 @@ def patch_settings(changes: Dict[str, Any] = Body(...)):
     return core.save_settings(changes)
 
 
+@app.post("/api/settings/reset")
+def reset_settings():
+    """Back to the recommended defaults (browser and API token are kept)."""
+    return core.save_settings({"reset_defaults": True})
+
+
 @app.get("/api/random-device")
 def random_device(os: str = "macos"):
     if os not in core.OS_KEYS:
@@ -297,7 +303,7 @@ def import_profiles(data: Dict[str, Any] = Body(...)):
 def update(pid: str, changes: Dict[str, Any] = Body(...)):
     if isinstance(changes.get("proxy"), str):
         changes["proxy"] = core.parse_proxy(changes["proxy"]) or {"type": "none"}
-    if _state(pid) == "running" and any(k not in ("name", "notes", "folder", "pinned") for k in changes):
+    if _state(pid) == "running" and any(k not in ("name", "notes", "folder", "pinned", "dock_badge") for k in changes):
         raise HTTPException(409, "Stop the profile before changing its fingerprint settings")
     try:
         return _with_state(core.update_profile(pid, changes))
@@ -313,6 +319,15 @@ def refresh(pid: str):
     core.new_fingerprint(p)
     core.save_profile(p)
     return _with_state(core.get_profile(pid))
+
+
+@app.post("/api/profiles/{pid}/reset")
+@app.post("/api/v1/profiles/{pid}/reset")
+def reset_profile(pid: str):
+    _profile_or_404(pid)
+    if _state(pid) == "running":
+        raise HTTPException(409, "Stop the profile first")
+    return _with_state(core.reset_profile(pid))
 
 
 @app.post("/api/profiles/{pid}/randomize")

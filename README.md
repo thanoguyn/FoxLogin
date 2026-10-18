@@ -19,6 +19,7 @@ FoxLogin runs on your own machine as a small web app. You can create any number 
 - [Realistic random fingerprints](#realistic-random-fingerprints)
 - [Mask options](#mask-options)
 - [Automation API](#automation-api)
+- [Desktop app packaging](#desktop-app-packaging)
 - [Project layout](#project-layout)
 - [Testing](#testing)
 - [Test results (evidence)](#test-results-evidence)
@@ -112,6 +113,16 @@ host:port
 - **Defaults for new profiles.** OS, language, timezone, geolocation, WebRTC, resolution, every mask, and extensions.
 - **Browser core.** Lists the installed Camoufox builds and has *Check for updates*. You can install a newer or older build (about 1.2 GB each), choose the default, or remove unused builds. Each profile can also pin its own build.
 - **API token** (optional). When it is set, every `/api/v1` and `/browser` call needs `Authorization: Bearer <token>` or `?token=<token>`.
+- **Reset to recommended** restores the recommended defaults. Inside a profile, **Reset to defaults** applies the current defaults to that profile. It keeps the name, proxy, OS and device.
+
+### Dock badge (macOS)
+
+The Camoufox icon in the Dock shows a red badge with the profile's number or letters, so you can tell profile windows apart.
+
+- **Auto** derives the badge from the name ("profile 3" → `3`).
+- **Custom** takes up to 4 characters. **Off** shows no badge.
+- Changes apply from the next launch.
+- The background Python processes no longer add their own Dock icon.
 
 ### API & Automation
 
@@ -137,7 +148,7 @@ Two values are deliberately **not** randomized:
 
 | Option | Masked / Noise | Real / Off |
 |---|---|---|
-| Canvas | Noise generated inside the Firefox engine (C++). Differs per profile and per session | Real hardware hash |
+| Canvas | Noise generated inside the Firefox engine (C++), the same as stock Firefox 145+. Changes on every browser launch and differs per profile | Real hardware hash, identical for every profile on the same machine |
 | WebGL image | Noise on `readPixels`. **pixelscan detects it, so it is Off by default** | No noise |
 | Audio context | Per-profile seed, stable across launches | No noise |
 | WebGL info | A GPU that fits the OS, screen and CPU | Real GPU |
@@ -195,6 +206,10 @@ Native:
 | POST | `/api/v1/profiles/import` | `{"text": "name\|proxy\|notes\|folder\|os\|start_url\n..."}` |
 | GET | `/api/v1/proxies` | Saved proxies with check results |
 | POST | `/api/v1/proxies/import` | `{"text": "one proxy per line"}` |
+
+## Desktop app packaging
+
+The plan for shipping FoxLogin as an installable desktop app for macOS, Windows and Linux is in [docs/PACKAGING.md](docs/PACKAGING.md).
 
 ## Project layout
 

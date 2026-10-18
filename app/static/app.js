@@ -513,6 +513,14 @@ const seg = (path, opts, val) => `<div class="seg" data-seg="${path}">${opts.map
 const row = (label, body, hint = '') => `<div class="frow"><label>${label}</label><div>${body}</div><div class="hint">${hint}</div></div>`;
 const section = (title, rows, key) => `<div class="sec-title" data-sec="${key}">${title}</div><div class="card" data-card="${key}">${rows.join('')}</div>`;
 const txt = (path, val, ph = '') => `<input type="text" data-path="${path}" value="${esc(val)}" placeholder="${esc(ph)}">`;
+// Mirrors core.dock_label
+function dockLabel(p) {
+  const b = p.dock_badge || { mode: 'auto' };
+  if (b.mode === 'off') return '';
+  if (b.mode === 'custom') return (b.text || '').trim().slice(0, 4);
+  const name = (p.name || '').trim(); const last = name.split(/\s+/).at(-1) || '';
+  return last && last.length <= 4 ? last.toUpperCase() : name.slice(0, 2).toUpperCase();
+}
 const tog = (path, on) => `<label class="switch"><input type="checkbox" data-path="${path}" ${on ? 'checked' : ''}><span></span></label>`;
 
 // mode: 'create' | 'edit' | 'template'
@@ -553,6 +561,7 @@ function renderFields(p, mode, extra = {}) {
     ess.push(row('Cookies', c.total ? `<div class="cookie-tags">${c.domains.map(([d, n]) => `<span>${esc(d)}<b>${n}</b></span>`).join('')}</div>` : '<span class="muted">No cookies yet</span>',
       '<button type="button" class="linkbtn" data-dact="cookies">Import / export</button>'));
     ess.push(row('New fingerprint', `<button type="button" class="linkbtn" data-dact="refresh">${ICON.refresh.replace('<svg', '<svg width="16" height="16"')} Refresh fingerprint</button>`));
+    ess.push(row('Default settings', '<button type="button" class="linkbtn" data-dact="reset">Reset to defaults</button>', 'Keeps name, proxy, OS and device'));
   }
   html.push(section(tmpl ? 'Identity &amp; location' : 'Profile essentials', ess, 'ess'));
 
@@ -608,6 +617,12 @@ function renderFields(p, mode, extra = {}) {
     row('uBlock Origin', tog('ublock', p.ublock), 'Built-in ad blocker'),
     row('Block images', tog('block_images', p.block_images)),
   ];
+  if (S.meta.hostOs === 'macos') {
+    const db = p.dock_badge || { mode: 'auto', text: '' }; const lbl = dockLabel(p);
+    ext.push(row('Dock badge', seg('dock_badge.mode', tmpl ? [['auto', 'Auto'], ['off', 'Off']] : [['auto', 'Auto'], ['custom', 'Custom'], ['off', 'Off']], db.mode)
+      + (db.mode === 'custom' && !tmpl ? `<div style="margin-top:4px"><input type="text" maxlength="4" data-path="dock_badge.text" value="${esc(db.text)}" placeholder="e.g. 3"></div>` : ''),
+      tmpl ? (db.mode === 'auto' ? 'Number from the profile name' : '') : lbl ? `Badge <b>${esc(lbl)}</b> on the Dock icon (next launch)` : 'No badge'));
+  }
   if (!tmpl) {
     const inst = (S.browsers && S.browsers.installed) || [];
     ext.push(row('Browser core', `<select data-path="browser"><option value="">App default${S.settings?.browser ? ` (${esc(S.settings.browser)})` : ''}</option>
@@ -770,6 +785,15 @@ async function onFormClick(e) {
       toast('New fingerprint generated'); load();
     } catch (err) { toast(err.message, true); }
   }
+  if (dact === 'reset') {
+    if (!confirm('Reset this profile\'s masks, location and extension settings to the defaults from Settings?')) return;
+    try {
+      await flushSave();
+      const p = await api(`/api/profiles/${obj.id}/reset`, { method: 'POST' });
+      S.drawer.p = p; S.drawer.preview = null; S.drawer.gpus = null; renderDrawer(); loadDrawerExtras();
+      toast('Profile reset to default settings'); load();
+    } catch (err) { toast(err.message, true); }
+  }
   if (dact === 'cookies') cookiesModal(obj.id);
   if (dact === 'pickproxy') { e.stopPropagation(); openProxyPop(e.target, { type: 'drawer' }); }
   if (e.target.id === 'btnCheckProxy') {
@@ -872,8 +896,10 @@ function renderSettings() {
   const avail = newest.filter(v => !v.installed && (showPre || !v.prerelease)).slice(0, 14);
   const jobs = Object.entries(b.jobs || {});
   $('#settingsBody').innerHTML = `
-    <h2>Default settings for new profiles</h2>
-    <p>Used by Add profile, Quick profile, bulk create and import. Existing profiles keep their own settings.</p>
+    <div style="display:flex;align-items:center;gap:12px"><h2 style="flex:1">Default settings for new profiles</h2>
+      <button class="chip" id="btnResetDefaults">Reset to recommended</button></div>
+    <p>Used by Add profile, Quick profile, bulk create and import. Existing profiles keep their own settings (profile › Reset to default settings applies these).</p>
+    <p class="sub">Recommended: OS of this computer · language, timezone, geolocation (prompt) and WebRTC from the proxy IP · Canvas noise · WebGL image off · WebGL info, audio and media devices masked · no uBlock.</p>
     <div class="form" data-form="settings" id="tmplForm"></div>
 
     <h2>Browser core (Camoufox)</h2>
@@ -908,6 +934,10 @@ function renderSettings() {
     <div class="card"><div class="frow"><label>API token</label><div><input type="text" id="apiToken" value="${esc(S.settings.api_token)}" placeholder="empty = no token (localhost only)"></div><div class="hint"><button class="chip" id="btnGenToken">Generate</button></div></div></div>
   `;
   renderSettingsTemplate();
+  $('#btnResetDefaults').onclick = async () => {
+    if (!confirm('Reset the default settings for new profiles to the recommended values?')) return;
+    S.settings = await api('/api/settings/reset', { method: 'POST' }); renderSettings(); toast('Defaults reset to recommended');
+  };
   $('#showPre').onchange = e => { store.set('fl.showPre', e.target.checked); renderSettings(); };
   $('#apiToken').onchange = async e => { S.settings = await api('/api/settings', { method: 'PATCH', body: { api_token: e.target.value.trim() } }); toast('API token saved'); };
   $('#btnGenToken').onclick = async () => {

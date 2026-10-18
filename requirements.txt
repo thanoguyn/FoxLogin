@@ -4,3 +4,4 @@ fastapi>=0.110
 uvicorn>=0.29
 requests
 PySocks
+pyobjc-framework-Cocoa; sys_platform == "darwin"

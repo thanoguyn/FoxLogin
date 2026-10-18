@@ -5,6 +5,10 @@ import webbrowser
 
 import uvicorn
 
+from app import core
+
+core.hide_dock_icon()
+
 PORT = int(os.environ.get("FOXCLI_PORT", 8765))
 
 if __name__ == "__main__":

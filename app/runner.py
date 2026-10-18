@@ -17,9 +17,11 @@ from collections import Counter
 
 warnings.filterwarnings("ignore")
 
-from camoufox.sync_api import Camoufox  # noqa: E402
-
 from app import core  # noqa: E402
+
+core.hide_dock_icon()  # before camoufox touches AppKit
+
+from camoufox.sync_api import Camoufox  # noqa: E402
 
 PROBE = """() => {
   let gl = null, vendor = null, renderer = null;
@@ -63,6 +65,8 @@ def main(pid: str, debug_port: int = 0, headless: bool = False) -> None:
     signal.signal(signal.SIGTERM, _on_term)
     signal.signal(signal.SIGINT, _on_term)
 
+    core.install_dock_hook()
+    os.environ["FOXCLI_DOCK_BADGE"] = core.dock_label(p)
     kw, loc = core.launch_kwargs(p, headless=headless, debug_port=debug_port or None)
     udir = core._pdir(pid) / "userdata"
     udir.mkdir(exist_ok=True)

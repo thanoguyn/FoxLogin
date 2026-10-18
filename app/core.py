@@ -63,6 +63,8 @@ DEFAULT_PROFILE: Dict[str, Any] = {
     "browser": "",      # Camoufox build for this profile ("" = app default)
     "pinned": False,
     "device": "",       # human label of the drawn hardware, e.g. MacBook Pro 14"
+    # Number/letters badged on the Camoufox Dock icon (macOS) to tell windows apart
+    "dock_badge": {"mode": "auto", "text": ""},
 }
 
 
@@ -105,8 +107,12 @@ def _merge_defaults(p: Dict[str, Any]) -> Dict[str, Any]:
 TEMPLATE_KEYS = (
     "os", "start_url", "timezone", "geolocation", "language", "webrtc", "resolution",
     "canvas", "webgl_image", "webgl_info", "audio", "media_devices",
-    "allow_extensions", "ublock", "block_images",
+    "allow_extensions", "ublock", "block_images", "dock_badge",
 )
+
+# Fields "Reset to defaults" copies from the template onto an existing profile.
+# OS and resolution stay: they are the device identity, not a preference.
+RESET_KEYS = tuple(k for k in TEMPLATE_KEYS if k not in ("os", "resolution", "start_url"))
 
 
 def get_settings() -> Dict[str, Any]:
@@ -119,6 +125,9 @@ def get_settings() -> Dict[str, Any]:
 
 def save_settings(changes: Dict[str, Any]) -> Dict[str, Any]:
     cur = _read_json(DATA / "settings.json", {}) or {}
+    if changes.get("reset_defaults"):
+        # Drop the saved template so the recommended code defaults apply again
+        cur.pop("defaults", None)
     if "defaults" in changes:
         d = {k: v for k, v in changes["defaults"].items() if k in TEMPLATE_KEYS}
         cur["defaults"] = _merge(cur.get("defaults", {}), d)
@@ -207,6 +216,18 @@ def update_profile(pid: str, changes: Dict[str, Any]) -> Dict[str, Any]:
         new_fingerprint(p, keep_gpu=True)
     save_profile(p)
     return get_profile(pid)
+
+
+def reset_profile(pid: str) -> Dict[str, Any]:
+    """Re-apply the default template's masks and location settings to a profile."""
+    tmpl = get_settings()["defaults"]
+    changes = {k: copy.deepcopy(tmpl[k]) for k in RESET_KEYS}
+    # Keep the profile's own GPU and badge text; only their modes come from the template
+    changes["webgl_info"] = {"mode": tmpl["webgl_info"]["mode"]}
+    changes["dock_badge"] = {"mode": tmpl["dock_badge"]["mode"]}
+    # Device counts were drawn to fit the device (a Mac mini has no webcam)
+    changes["media_devices"] = {"mode": tmpl["media_devices"]["mode"]}
+    return update_profile(pid, changes)
 
 
 def delete_profile(pid: str) -> None:
@@ -756,3 +777,83 @@ def browser_versions() -> Dict[str, Any]:
                 "installed": (rname, full) in have,
             })
     return {"installed": installed, "available": available, "default": get_settings()["browser"]}
+
+
+# ------------------------------------------------------------------ macOS Dock
+
+def hide_dock_icon() -> None:
+    """Keep this Python process out of the Dock.
+
+    Camoufox measures the screen through screeninfo -> AppKit NSScreen, which
+    turns a framework Python into a Foreground app with its own Dock icon."""
+    import sys
+
+    if sys.platform != "darwin":
+        return
+    try:
+        from AppKit import NSApplication
+
+        NSApplication.sharedApplication().setActivationPolicy_(2)  # Prohibited
+    except Exception:
+        pass
+
+
+def dock_label(p: Dict[str, Any]) -> str:
+    """Badge text for the profile's Dock icon: "" when disabled."""
+    b = p.get("dock_badge") or {}
+    mode = b.get("mode", "auto")
+    if mode == "off":
+        return ""
+    if mode == "custom":
+        return (b.get("text") or "").strip()[:4]
+    name = (p.get("name") or "").strip()
+    last = name.split()[-1] if name else ""
+    if last and len(last) <= 4:      # "profile 3" -> "3", "mac B" -> "B"
+        return last.upper()
+    return name[:2].upper()
+
+
+DOCK_MARK = "// FOXCLI-DOCK-BADGE v3"
+DOCK_HOOK = DOCK_MARK + """
+// Added by FoxLogin: badges the Dock icon with FOXCLI_DOCK_BADGE so several
+// profile windows can be told apart. No-op without the variable or off macOS.
+// Firefox clears the badge during startup, so it is re-applied by a timer.
+(() => {
+  try {
+    const text = getenv("FOXCLI_DOCK_BADGE");
+    if (!text) return;
+    const dock = Components.classes["@mozilla.org/widget/macdocksupport;1"]
+      .getService(Components.interfaces.nsIMacDockSupport);
+    const timer = Components.classes["@mozilla.org/timer;1"].createInstance(Components.interfaces.nsITimer);
+    globalThis.__foxcliDockTimer = timer;
+    timer.initWithCallback({ notify() { try { if (dock.badgeText != text) dock.badgeText = text; } catch (e) {} } },
+      1000, Components.interfaces.nsITimer.TYPE_REPEATING_SLACK);
+  } catch (e) {}
+})();
+// FOXCLI-DOCK-BADGE end
+"""
+
+
+def install_dock_hook() -> None:
+    """Make sure every installed macOS Camoufox build carries DOCK_HOOK.
+
+    Re-run before each launch: a newly installed build starts without it, and
+    an older version of the block is replaced."""
+    import re
+    import sys
+
+    if sys.platform != "darwin":
+        return
+    from camoufox.pkgman import INSTALL_DIR
+
+    for cfg in Path(INSTALL_DIR).glob("browsers/*/*/Camoufox.app/Contents/Resources/camoufox.cfg"):
+        try:
+            text = cfg.read_text()
+            if DOCK_MARK in text:
+                continue
+            text = re.sub(r"\n?// FOXCLI-DOCK-BADGE v\d+.*?// FOXCLI-DOCK-BADGE end\n", "", text, flags=re.S)
+            tmp = cfg.with_suffix(".cfg.tmp")   # a launching Firefox never sees half a file
+            tmp.write_text(text.rstrip("\n") + "\n\n" + DOCK_HOOK)
+            tmp.replace(cfg)
+        except OSError:
+            pass
