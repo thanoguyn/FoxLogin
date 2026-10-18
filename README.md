@@ -23,6 +23,7 @@ FoxLogin runs on your own machine as a small web app. You can create any number 
 - [Testing](#testing)
 - [Test results (evidence)](#test-results-evidence)
 - [Known limitations](#known-limitations)
+- [License](#license)
 - [Disclaimer](#disclaimer)
 
 ---
@@ -321,6 +322,12 @@ This is the self-test page from a masked **Windows** profile, launched on a Mac.
 - **WebGL image noise is Off by default.** pixelscan detects read-back noise.
 - **No Playwright `connect()`.** It cannot attach to a running profile. Use Puppeteer (`protocol: 'webDriverBiDi'`), Selenium 4 or another BiDi client.
 - **Proxy detection depends on the IP.** Datacenter proxies are flagged as proxies by IP-reputation checks, whatever the browser does. Use residential or mobile proxies if that matters.
+
+## License
+
+FoxLogin is released under the [MIT License](LICENSE).
+
+FoxLogin downloads and launches [Camoufox](https://github.com/daijro/camoufox), a Firefox-based browser licensed under **MPL-2.0**. The `camoufox` Python package it uses is MIT-licensed. Neither is included in this repository. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for every dependency and its license.
 
 ## Disclaimer
 

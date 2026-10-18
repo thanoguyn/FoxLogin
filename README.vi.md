@@ -83,3 +83,7 @@ python3 tests/check_marks.py                       # 27 kiểm tra: mark có là
 python3 tests/check_api.py                         # API REST + WebDriver BiDi (cần pip3 install websockets)
 python3 tests/check_sites.py <profile_id> out_dir  # pixelscan, iphey, browserscan, creepjs (chụp màn hình)
 ```
+
+## Giấy phép
+
+FoxLogin phát hành theo [giấy phép MIT](LICENSE). FoxLogin tải về và chạy trình duyệt [Camoufox](https://github.com/daijro/camoufox) (nhân Firefox, giấy phép **MPL-2.0**). Gói Python `camoufox` dùng giấy phép MIT. Repo này không chứa Camoufox. Giấy phép của mọi thành phần bên thứ ba xem ở [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
