@@ -1,0 +1,7 @@
+# Extra packages for the desktop build (on top of ../requirements.txt)
+pyinstaller>=6.10
+pywebview>=5.3
+pywebview[qt]>=5.3; sys_platform == "linux"
+psutil>=5.9
+platformdirs>=4
+pillow>=10

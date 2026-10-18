@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=FoxLogin
+Comment=Browser profile manager on Camoufox
+Exec=FoxLogin
+Icon=foxlogin
+Categories=Network;WebBrowser;
+Terminal=false

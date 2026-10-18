@@ -1176,4 +1176,34 @@ function bind() {
   const page = (location.hash || '#profiles').slice(1);
   go(['profiles', 'proxies', 'settings', 'api'].includes(page) ? page : 'profiles');
   setInterval(pollStates, 2000);
+  firstRun();
 })();
+
+/* First launch of the packaged app: no Camoufox build is installed yet */
+async function firstRun() {
+  const b = await api('/api/browsers').catch(() => null);
+  if (!b || b.installed.length || (b.jobs.setup && b.jobs.setup.state === 'done')) return;
+  const show = (job) => {
+    const failed = job && job.state === 'failed';
+    modal('Install the browser core', `
+      <p>FoxLogin runs every profile on <b>Camoufox</b>, a hardened Firefox. It is downloaded once
+        (about 1.2 GB, plus the GeoIP database) and shared by all profiles.</p>
+      ${job ? `<p>${failed ? '<span class="bad">Install failed.</span> Check your connection and try again.' : 'Downloading… you can keep using the app meanwhile.'}</p>
+        <div class="joblog">${esc(job.log || 'Starting…')}</div>` : ''}`,
+      job && !failed ? null : async () => {
+        await api('/api/browsers/setup', { method: 'POST' }).catch(e => toast(e.message, true));
+        setTimeout(poll, 500); return false;
+      }, failed ? 'Retry' : 'Install now', true);
+  };
+  const poll = async () => {
+    const st = await api('/api/browsers').catch(() => null);
+    const job = st && st.jobs.setup;
+    if (st && st.installed.length && (!job || job.state === 'done')) {
+      $('#modal').hidden = true; toast('Camoufox installed. You can run profiles now.'); return;
+    }
+    if (!$('#modal').hidden || job?.state === 'failed') show(job);
+    if (job && job.state === 'running') setTimeout(poll, 1500);
+  };
+  show(b.jobs.setup && b.jobs.setup.state !== 'done' ? b.jobs.setup : null);
+  if (b.jobs.setup && b.jobs.setup.state === 'running') setTimeout(poll, 1500);
+}
