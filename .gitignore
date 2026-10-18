@@ -4,3 +4,9 @@ __pycache__/
 .DS_Store
 check-results/
 *.log
+build/
+dist/
+target/
+node_modules/
+packaging/tauri/src-tauri/resources/
+packaging/tauri/src-tauri/gen/

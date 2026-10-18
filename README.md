@@ -211,6 +211,8 @@ Native:
 
 The plan for shipping FoxLogin as an installable desktop app for macOS, Windows and Linux is in [docs/PACKAGING.md](docs/PACKAGING.md).
 
+The `desktop-tauri` branch builds that app with a [Tauri](https://tauri.app) shell around the same Python backend. See [docs/PACKAGING-TAURI.md](docs/PACKAGING-TAURI.md) for its design, build steps and test results.
+
 ## Project layout
 
 ```

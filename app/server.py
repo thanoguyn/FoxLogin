@@ -43,9 +43,7 @@ def _adopted_pid(pid: str) -> Optional[int]:
     rt = core._read_json(core._pdir(pid) / "runtime.json")
     if not rt or not rt.get("pid"):
         return None
-    try:
-        os.kill(rt["pid"], 0)
-    except OSError:
+    if not core.runner_alive(rt["pid"], pid):
         return None
     if rt.get("port"):
         ports[pid] = rt["port"]
@@ -118,7 +116,7 @@ async def start_profile(pid: str, automation: bool = False, headless: bool = Fal
         if automation and not ports.get(pid):
             raise HTTPException(409, "Profile is running without automation; stop it first")
         return _run_info(pid)
-    cmd = [sys.executable, "-W", "ignore", "-m", "app.runner", pid]
+    cmd = core.self_cmd("runner", pid)
     port = _free_port() if automation else 0
     if port:
         cmd += ["--port", str(port)]
@@ -126,7 +124,8 @@ async def start_profile(pid: str, automation: bool = False, headless: bool = Fal
     if headless:
         cmd.append("--headless")
     log = open(LOGS / f"{pid}.log", "wb")
-    procs[pid] = subprocess.Popen(cmd, cwd=str(core.ROOT), stdout=log, stderr=subprocess.STDOUT)
+    procs[pid] = subprocess.Popen(cmd, cwd=str(core.DATA if core.FROZEN else core.ROOT), stdout=log, stderr=subprocess.STDOUT,
+                                  stdin=subprocess.DEVNULL, **core.popen_kwargs())
     if wait or port:
         deadline = time.time() + 90
         while time.time() < deadline:
@@ -145,21 +144,11 @@ async def start_profile(pid: str, automation: bool = False, headless: bool = Fal
 
 def stop_profile(pid: str) -> Dict[str, Any]:
     pr = procs.get(pid)
-    if pr is None and (opid := _adopted_pid(pid)):
-        import signal
-        os.kill(opid, signal.SIGTERM)
-        for _ in range(60):
-            try:
-                os.kill(opid, 0)
-            except OSError:
-                break
-            time.sleep(0.25)
-    if pr and pr.poll() is None:
-        pr.terminate()
-        try:
-            pr.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            pr.kill()
+    if pr is not None and pr.poll() is None:
+        core.stop_runner(pr.pid, pid)
+        pr.wait()
+    elif pr is None and (opid := _adopted_pid(pid)):
+        core.stop_runner(opid, pid)
     procs.pop(pid, None)
     ports.pop(pid, None)
     return {"status": "success", "profileId": pid, "state": "ready"}
@@ -192,6 +181,20 @@ def fptest():
     return FileResponse(STATIC / "fptest.html")
 
 
+@app.get("/api/app")
+def app_info():
+    """Lets a second launch of the desktop app find this one."""
+    return {"app": "FoxLogin", "version": core.VERSION, "window": callable(getattr(app.state, "focus", None))}
+
+
+@app.post("/api/app/focus")
+def app_focus():
+    focus = getattr(app.state, "focus", None)
+    if callable(focus):
+        focus()
+    return {"window": callable(focus)}
+
+
 @app.get("/api/meta")
 def meta():
     return {
@@ -199,6 +202,8 @@ def meta():
         "gpus": {o: core.coherent_gpus(o) for o in core.OS_KEYS},
         "hostOs": core.host_os(),
         "port": PORT,
+        "version": core.VERSION,
+        "dataDir": str(core.DATA),
     }
 
 
@@ -608,10 +613,16 @@ def _job(name: str, args: List[str]) -> Dict[str, Any]:
     if name in jobs and jobs[name]["state"] == "running":
         raise HTTPException(409, "Already running")
     logf = LOGS / f"job-{re.sub(r'[^a-z0-9.-]', '_', name.lower())}.log"
-    proc = subprocess.Popen([sys.executable, "-W", "ignore", "-m", "camoufox", *args],
-                            stdout=open(logf, "wb"), stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    proc = subprocess.Popen(core.self_cmd("camoufox", *args), stdout=open(logf, "wb"),
+                            stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **core.popen_kwargs())
     jobs[name] = {"state": "running", "log": str(logf), "proc": proc, "started": time.time()}
     return {"job": name}
+
+
+@app.post("/api/browsers/setup")
+def browsers_setup():
+    """First run: the Camoufox build this camoufox library pairs with, plus GeoIP and addons."""
+    return _job("setup", ["fetch"])
 
 
 @app.post("/api/browsers/sync")

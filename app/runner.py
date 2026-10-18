@@ -62,6 +62,8 @@ def main(pid: str, debug_port: int = 0, headless: bool = False) -> None:
     p = core.get_profile(pid)
     if p is None:
         sys.exit(f"profile {pid} not found")
+    stop_flag = core._pdir(pid) / "stop.flag"   # Stop on Windows, where SIGTERM can't be caught
+    stop_flag.unlink(missing_ok=True)
     signal.signal(signal.SIGTERM, _on_term)
     signal.signal(signal.SIGINT, _on_term)
 
@@ -99,7 +101,7 @@ def main(pid: str, debug_port: int = 0, headless: bool = False) -> None:
         closed = []
         ctx.on("close", lambda *_: closed.append(1))
         last_save = time.time()
-        while not stop and not closed:
+        while not stop and not closed and not stop_flag.exists():
             try:
                 if not ctx.pages:
                     break
@@ -113,13 +115,18 @@ def main(pid: str, debug_port: int = 0, headless: bool = False) -> None:
             save_cookies(pid, ctx)
 
 
-if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
+def cli(argv=None) -> None:
+    ap = argparse.ArgumentParser(prog="runner")
     ap.add_argument("pid")
     ap.add_argument("--port", type=int, default=0, help="WebDriver BiDi port for automation")
     ap.add_argument("--headless", action="store_true")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     try:
         main(a.pid, a.port, a.headless)
     finally:
         (core._pdir(a.pid) / "runtime.json").unlink(missing_ok=True)
+        (core._pdir(a.pid) / "stop.flag").unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    cli()

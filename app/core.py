@@ -15,6 +15,8 @@ import json
 import os
 import random
 import shutil
+import subprocess
+import sys
 import time
 import uuid
 import warnings
@@ -23,8 +25,23 @@ from typing import Any, Dict, List, Optional, Tuple
 
 warnings.filterwarnings("ignore")
 
+VERSION = "1.0.0"
+
+# Packaged by PyInstaller: one executable re-invokes itself in other modes
+FROZEN = bool(getattr(sys, "frozen", False))
 ROOT = Path(__file__).resolve().parent.parent
-DATA = Path(os.environ.get("FOXCLI_DATA", ROOT / "data"))
+
+
+def _default_data() -> Path:
+    if not FROZEN:
+        return ROOT / "data"
+    # The app bundle is read-only: keep profiles in the user's app-data folder
+    from platformdirs import user_data_dir
+
+    return Path(user_data_dir("FoxLogin", appauthor=False, roaming=True))
+
+
+DATA = Path(os.environ.get("FOXCLI_DATA") or _default_data())
 PROFILES = DATA / "profiles"
 PROFILES.mkdir(parents=True, exist_ok=True)
 
@@ -849,7 +866,9 @@ def install_dock_hook() -> None:
     for cfg in Path(INSTALL_DIR).glob("browsers/*/*/Camoufox.app/Contents/Resources/camoufox.cfg"):
         try:
             text = cfg.read_text()
-            if DOCK_MARK in text:
+            # Leave an equal or newer block alone: another FoxLogin build may share this cache
+            have = [int(v) for v in re.findall(r"// FOXCLI-DOCK-BADGE v(\d+)", text)]
+            if have and max(have) >= int(DOCK_MARK.rsplit("v", 1)[1]):
                 continue
             text = re.sub(r"\n?// FOXCLI-DOCK-BADGE v\d+.*?// FOXCLI-DOCK-BADGE end\n", "", text, flags=re.S)
             tmp = cfg.with_suffix(".cfg.tmp")   # a launching Firefox never sees half a file
@@ -857,3 +876,58 @@ def install_dock_hook() -> None:
             tmp.replace(cfg)
         except OSError:
             pass
+
+
+# ------------------------------------------------------------------ processes
+
+def self_cmd(mode: str, *args: str) -> List[str]:
+    """Command line that runs another part of FoxLogin ("runner" or "camoufox").
+
+    From source that is `python -m <module>`; the packaged app has no Python
+    to hand modules to, so it re-runs its own executable with --<mode>."""
+    if FROZEN:
+        return [sys.executable, f"--{mode}", *args]
+    module = {"runner": "app.runner", "camoufox": "camoufox"}[mode]
+    return [sys.executable, "-W", "ignore", "-m", module, *args]
+
+
+def popen_kwargs() -> Dict[str, Any]:
+    """Keep child processes alive and console-less after the app window closes."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+    return {"start_new_session": True}
+
+
+def runner_alive(os_pid: int, profile_id: str) -> bool:
+    """Is `os_pid` still the runner of `profile_id`? (pids get reused)
+
+    os.kill(pid, 0) is not usable here: on Windows it terminates the process."""
+    import psutil
+
+    try:
+        cmd = psutil.Process(os_pid).cmdline()
+    except (psutil.Error, OSError):
+        return False
+    return profile_id in cmd
+
+
+def stop_runner(os_pid: int, profile_id: str, timeout: float = 15) -> None:
+    """Ask a runner to close its browser and save cookies, then make sure it is gone.
+
+    The stop.flag file works on every OS; Windows has no SIGTERM to catch."""
+    import psutil
+
+    (_pdir(profile_id) / "stop.flag").write_text("1")
+    try:
+        proc = psutil.Process(os_pid)
+        if os.name != "nt":
+            proc.terminate()
+        proc.wait(timeout)
+    except psutil.TimeoutExpired:
+        for p in proc.children(recursive=True) + [proc]:
+            try:
+                p.kill()
+            except psutil.Error:
+                pass
+    except psutil.Error:
+        pass

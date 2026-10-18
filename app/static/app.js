@@ -224,7 +224,7 @@ async function patchProfile(id, body) {
   return p;
 }
 async function deleteProfiles(ids) {
-  if (!confirm(`Delete ${ids.length} profile(s)? Browser data and cookies are removed too.`)) return;
+  if (!(await ask(`Delete ${ids.length} profile(s)? Browser data and cookies are removed too.`))) return;
   await api('/api/profiles/delete', { body: ids });
   ids.forEach(i => S.selected.delete(i));
   await load(); toast(`Deleted ${ids.length} profile(s)`);
@@ -247,6 +247,17 @@ function modal(title, html, onOk, okLabel = 'OK', wide = false) {
   };
   const first = $('#modalBody input, #modalBody textarea');
   if (first) first.focus();
+}
+
+// In-page confirm. window.confirm is a silent no-op in some desktop webviews
+// (WKWebView in the Tauri app), so destructive actions ask through the modal.
+function ask(text, okLabel = 'OK') {
+  return new Promise(resolve => {
+    modal('Please confirm', `<p>${esc(text)}</p>`, () => resolve(true), okLabel);
+    const no = () => resolve(false);
+    $('#modalCancel').addEventListener('click', no, { once: true });
+    $('#modalX').addEventListener('click', no, { once: true });
+  });
 }
 
 function cookiesModal(id) {
@@ -786,7 +797,7 @@ async function onFormClick(e) {
     } catch (err) { toast(err.message, true); }
   }
   if (dact === 'reset') {
-    if (!confirm('Reset this profile\'s masks, location and extension settings to the defaults from Settings?')) return;
+    if (!(await ask('Reset this profile\'s masks, location and extension settings to the defaults from Settings?'))) return;
     try {
       await flushSave();
       const p = await api(`/api/profiles/${obj.id}/reset`, { method: 'POST' });
@@ -935,7 +946,7 @@ function renderSettings() {
   `;
   renderSettingsTemplate();
   $('#btnResetDefaults').onclick = async () => {
-    if (!confirm('Reset the default settings for new profiles to the recommended values?')) return;
+    if (!(await ask('Reset the default settings for new profiles to the recommended values?'))) return;
     S.settings = await api('/api/settings/reset', { method: 'POST' }); renderSettings(); toast('Defaults reset to recommended');
   };
   $('#showPre').onchange = e => { store.set('fl.showPre', e.target.checked); renderSettings(); };
@@ -954,7 +965,7 @@ async function browserAction(btn) {
   try {
     if (act === 'default') { S.settings = await api('/api/browsers/default', { body: { version: v } }); toast(`New launches use ${v}`); }
     if (act === 'remove') {
-      if (!confirm(`Remove Camoufox ${v}? Profiles pinned to it fall back to the default.`)) return;
+      if (!(await ask(`Remove Camoufox ${v}? Profiles pinned to it fall back to the default.`))) return;
       await api('/api/browsers/remove', { body: { version: v, repo: btn.dataset.r } }); toast(`Removed ${v}`);
     }
     if (act === 'install') { await api('/api/browsers/install', { body: { version: v, repo: btn.dataset.r } }); toast(`Downloading ${v} (≈1.2 GB)…`); }
@@ -1124,7 +1135,7 @@ function bind() {
   $('#btnPxCheckAll').onclick = () => checkProxies(S.proxies.map(x => x.id));
   $('#btnPxCheck').onclick = () => checkProxies([...S.pxSelected]);
   $('#btnPxDelete').onclick = async () => {
-    if (!confirm(`Delete ${S.pxSelected.size} proxies from the list? Profiles keep their current proxy.`)) return;
+    if (!(await ask(`Delete ${S.pxSelected.size} proxies from the list? Profiles keep their current proxy.`))) return;
     await api('/api/proxies/delete', { body: [...S.pxSelected] }); S.pxSelected.clear(); loadProxies();
   };
   $('#pxAll').onchange = e => { S.proxies.forEach(x => e.target.checked ? S.pxSelected.add(x.id) : S.pxSelected.delete(x.id)); renderAll(); };

@@ -1,0 +1,88 @@
+# Builds the Tauri desktop app on macOS, Windows and Linux.
+# Every push to desktop-tauri uploads the installers as workflow artifacts;
+# a tag like tauri-v1.0.0 also attaches them to a GitHub Release.
+name: Desktop app (Tauri)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [desktop-tauri]
+    tags: ["tauri-v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14          # Apple Silicon
+            name: macos-arm64
+          - os: macos-13          # Intel
+            name: macos-x64
+          - os: windows-latest
+            name: windows-x64
+          - os: ubuntu-22.04
+            name: linux-x64
+    runs-on: ${{ matrix.os }}
+    env:
+      CI: "true"                  # create-dmg: skip the Finder layout step
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packaging/tauri/src-tauri -> target
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Build the Python backend
+        run: python packaging/tauri/build.py --backend
+
+      - name: Smoke-test the packaged backend
+        run: python packaging/tauri/smoke_test.py
+
+      - name: Build the Tauri app and installers
+        working-directory: packaging/tauri
+        run: |
+          npm install
+          npx tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FoxLogin-${{ matrix.name }}
+          if-no-files-found: error
+          path: |
+            packaging/tauri/src-tauri/target/release/bundle/dmg/*.dmg
+            packaging/tauri/src-tauri/target/release/bundle/msi/*.msi
+            packaging/tauri/src-tauri/target/release/bundle/nsis/*.exe
+            packaging/tauri/src-tauri/target/release/bundle/appimage/*.AppImage
+            packaging/tauri/src-tauri/target/release/bundle/deb/*.deb
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/tauri-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: dist/**/*
