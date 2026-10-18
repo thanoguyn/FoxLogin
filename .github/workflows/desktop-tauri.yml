@@ -1,6 +1,7 @@
 # Builds the Tauri desktop app on macOS, Windows and Linux.
-# Every push to desktop-tauri uploads the installers as workflow artifacts;
-# a tag like tauri-v1.0.0 also attaches them to a GitHub Release.
+# Every push to desktop-tauri (and every pull request that touches the app)
+# uploads the installers as workflow artifacts; a tag like tauri-v1.0.0 also
+# attaches them to a draft GitHub Release.
 name: Desktop app (Tauri)
 
 on:
@@ -8,6 +9,17 @@ on:
   push:
     branches: [desktop-tauri]
     tags: ["tauri-v*"]
+  pull_request:
+    paths:
+      - "app/**"
+      - "packaging/tauri/**"
+      - "requirements.txt"
+      - ".github/workflows/desktop-tauri.yml"
+
+# A newer push to the same branch cancels the build still running for the old one
+concurrency:
+  group: desktop-tauri-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
