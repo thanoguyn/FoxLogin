@@ -17,7 +17,7 @@ jobs:
         include:
           - os: macos-14          # Apple Silicon
             name: macos-arm64
-          - os: macos-13          # Intel
+          - os: macos-15-intel    # Intel (macos-13 was retired in Dec 2025)
             name: macos-x64
           - os: windows-latest
             name: windows-x64

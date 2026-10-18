@@ -83,8 +83,8 @@ On macOS, set `CI=true` when building where Finder cannot be scripted (CI, SSH).
 ### CI
 
 `.github/workflows/desktop-tauri.yml` runs on every push to `desktop-tauri`, and can also be started by hand. It builds on four machines:
-- macOS arm64
-- macOS x64
+- macOS arm64 (`macos-14`)
+- macOS x64 (`macos-15-intel`)
 - Windows x64
 - Linux x64
 
@@ -104,9 +104,10 @@ All runs below used a temporary data folder (`FOXCLI_DATA`) and random ports. Th
 | `tests/check_api.py` against the backend **inside the signed `.app`** (REST start → WebDriver BiDi → stop) | 3/3 PASS |
 | `packaging/tauri/smoke_test.py` (packaged backend: UI, create / list / delete profile, runner mode) | 6/6 PASS |
 | Quit the app while a profile runs → profile keeps running → relaunch adopts it (new port, `wsUrl` updated) → Stop saves cookies | PASS |
-| Second launch exits and focuses the first; only one backend runs | PASS |
+| Second launch exits right away and no second backend starts (bringing the first window to the front was not checked: no screen access) | PASS |
+| Signed **`.app` bundle** (hardened runtime, debug build): WKWebView loads the UI from the backend, cookie export reaches `~/Downloads`, toast shown | PASS |
 | Shell killed with SIGKILL → backend exits on its own | PASS |
-| Real WKWebView, scripted self-test (debug build, `FOXLOGIN_SELFTEST`): UI loaded, cookie export saved to `~/Downloads`, a taken name becomes `… (1).json`, toast "Saved to the Downloads folder" | PASS |
+| Real WKWebView, scripted self-test (bare debug binary, `FOXLOGIN_SELFTEST`): UI loaded, cookie export saved to `~/Downloads`, a taken name becomes `… (1).json`, toast "Saved to the Downloads folder" | PASS |
 | In-page `ask()` modal (Chrome): shown, Cancel keeps the profile, OK deletes it | PASS |
 | `codesign --verify --deep --strict` on the app, before and after running it | valid |
 | Backend start-up | 0.9 s (about 15 s on the very first launch after install, while macOS scans the new binaries) |
