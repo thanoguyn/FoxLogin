@@ -1,0 +1,6 @@
+camoufox[geoip]==0.5.8
+playwright>=1.55
+fastapi>=0.110
+uvicorn>=0.29
+requests
+PySocks

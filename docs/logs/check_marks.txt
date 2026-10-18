@@ -1,0 +1,36 @@
+A {"canvasHash": "eaeee7b4fddeed78", "webglImageHash": "6299dd0636306312", "webglPixelsHash": "450b4e5eec326368", "webglRenderer": "Apple M1, or similar", "audioHash": "6e899ee38f0fa7c4", "mediaDevices": "cam 1 / mic 1 / sp 1", "screen": "1470x956 @1", "fonts": "d12539fc165c9edb", "clientRects": "213.8333282470703x23", "timezone": "Asia/Ho_Chi_Minh", "languages": "vi-VN,vi,en-US,en"}
+A2 {"canvasHash": "d9ee7bf7cae3d3de", "webglImageHash": "c92d1a1049248d61", "webglPixelsHash": "e292143f4cc8cee0", "webglRenderer": "Apple M1, or similar", "audioHash": "6e899ee38f0fa7c4", "mediaDevices": "cam 1 / mic 1 / sp 1", "screen": "1470x956 @1", "fonts": "d12539fc165c9edb", "clientRects": "213.8333282470703x23", "timezone": "Asia/Ho_Chi_Minh", "languages": "vi-VN,vi,en-US,en"}
+B {"canvasHash": "8736cf30fd9479bc", "webglImageHash": "d64323477519a51b", "webglPixelsHash": "5f1afcff7b3cc442", "webglRenderer": "Apple M1, or similar", "audioHash": "349ff2dfabe3fada", "mediaDevices": "cam 2 / mic 1 / sp 2", "screen": "2056x1329 @1", "fonts": "d12539fc165c9edb", "clientRects": "213.8333282470703x23", "timezone": "Asia/Ho_Chi_Minh", "languages": "vi-VN,vi,en-US,en"}
+R1 {"canvasHash": "542f60531e9e0563", "webglImageHash": "64b71099cf08e308", "webglPixelsHash": "bf8b18b3a8d47fd4", "webglRenderer": "Apple M1, or similar", "audioHash": "5ed296523853abef", "mediaDevices": "cam 1 / mic 1 / sp 2", "screen": "1440x900 @1", "fonts": "d12539fc165c9edb", "clientRects": "213.8333282470703x23", "timezone": "Asia/Ho_Chi_Minh", "languages": "vi-VN,vi,en-US,en"}
+R2 {"canvasHash": "542f60531e9e0563", "webglImageHash": "64b71099cf08e308", "webglPixelsHash": "bf8b18b3a8d47fd4", "webglRenderer": "Apple M1, or similar", "audioHash": "5ed296523853abef", "mediaDevices": "cam 1 / mic 1 / sp 2", "screen": "1440x900 @1", "fonts": "d12539fc165c9edb", "clientRects": "213.8333282470703x23", "timezone": "Asia/Ho_Chi_Minh", "languages": "vi-VN,vi,en-US,en"}
+W1 {"canvasHash": "93252917a4bc818e", "webglImageHash": "ec022179d04fc99a", "webglPixelsHash": "bf8b18b3a8d47fd4", "webglRenderer": "ANGLE (Intel, Intel(R) Arc(TM) A750 Graphics Direct3D11 vs_5_0 ps_5_0), or similar", "audioHash": "feb1340d25caedc7", "mediaDevices": "cam 1 / mic 1 / sp 1", "screen": "1920x1080 @1", "fonts": "d12539fc165c9edb", "clientRects": "208.8333282470703x20", "timezone": "Asia/Ho_Chi_Minh", "languages": "vi-VN,vi,en-US,en"}
+W2 {"canvasHash": "2ea607171f2d3c4f", "webglImageHash": "4ad486a7efbf1706", "webglPixelsHash": "bf8b18b3a8d47fd4", "webglRenderer": "ANGLE (NVIDIA, NVIDIA GeForce 8800 GTX Direct3D11 vs_5_0 ps_5_0), or similar", "audioHash": "9ddd200824951eec", "mediaDevices": "cam 1 / mic 1 / sp 1", "screen": "2560x1440 @1", "fonts": "d12539fc165c9edb", "clientRects": "208.8333282470703x20", "timezone": "Asia/Ho_Chi_Minh", "languages": "vi-VN,vi,en-US,en"}
+PASS canvasHash: masked A != B
+PASS canvasHash: masked A != real
+PASS canvasHash: real R1 == R2 (host value)
+PASS webglImageHash: masked A != B
+PASS webglImageHash: masked A != real
+PASS webglImageHash: real R1 == R2 (host value)
+PASS webglPixelsHash: masked A != B
+PASS webglPixelsHash: masked A != real
+PASS webglPixelsHash: real R1 == R2 (host value)
+PASS audioHash: masked A != B
+PASS audioHash: masked A != real
+PASS audioHash: real R1 == R2 (host value)
+PASS webglRenderer: Windows W1 != W2
+PASS webglRenderer: Windows masked != host real
+PASS webgl renderer applied = profile choice (W1)
+PASS userAgent: Windows identity
+PASS webglRenderer: real R1 == R2
+PASS mediaDevices B = cam 2 / mic 1 / sp 2
+PASS mediaDevices A = cam 1 / mic 1 / sp 1
+PASS audioHash: stable across relaunch of A
+PASS webglRenderer: stable across relaunch of A
+PASS webglParams: stable across relaunch of A
+PASS mediaDevices: stable across relaunch of A
+PASS userAgent: stable across relaunch of A
+PASS fonts: stable across relaunch of A
+PASS canvas stable within one session
+PASS solid-colour WebGL buffer untouched by noise (red-box probe)
+
+ALL PASS

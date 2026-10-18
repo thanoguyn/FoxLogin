@@ -1,0 +1,14 @@
+POST /api/v1/profiles/fe2d2a9b8674/start?headless=true
+  wsUrl: ws://127.0.0.1:8766/ws/fe2d2a9b8674
+  document.title                                       = 'Example Domain'
+  navigator.webdriver                                  = False
+  navigator.userAgent                                  = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:156.0) Gecko/20100101 Firefox/156.0'
+  navigator.platform                                   = 'Win32'
+  Intl.DateTimeFormat().resolvedOptions().timeZone     = 'Asia/Ho_Chi_Minh'
+  screen.width + 'x' + screen.height                   = '1920x1080'
+POST /browser/stop-profile -> ready
+PASS page loaded over BiDi
+PASS navigator.webdriver is false
+PASS Windows identity (userAgent + platform)
+
+ALL PASS

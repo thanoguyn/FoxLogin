@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fingerprint self-test</title>
+<style>
+  body { font: 14px/1.5 -apple-system, system-ui, sans-serif; margin: 24px; color: #1f2328; background: #fff; }
+  table { border-collapse: collapse; width: 100%; max-width: 980px; }
+  td { border-bottom: 1px solid #e6e6e6; padding: 7px 10px; vertical-align: top; word-break: break-all; }
+  td:first-child { width: 190px; color: #666; }
+  pre { display: none; }
+</style>
+</head>
+<body>
+<h2>Fingerprint self-test</h2>
+<table id="t"></table>
+<pre id="out"></pre>
+<script>
+async function sha(s) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].slice(0, 8).map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function canvas2d() {
+  const c = document.createElement('canvas'); c.width = 280; c.height = 60;
+  const x = c.getContext('2d');
+  x.textBaseline = 'top'; x.font = '16px Arial'; x.fillStyle = '#f60'; x.fillRect(100, 1, 62, 20);
+  x.fillStyle = '#069'; x.fillText('FoxLogin, fp test 😃 <canvas>', 2, 15);
+  x.fillStyle = 'rgba(102,204,0,0.7)'; x.fillText('FoxLogin, fp test 😃 <canvas>', 4, 17);
+  x.beginPath(); x.arc(240, 30, 20, 0, Math.PI * 2); x.strokeStyle = '#c0f'; x.stroke();
+  return c.toDataURL();
+}
+function webgl() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+  const gl = c.getContext('webgl', { preserveDrawingBuffer: true });
+  if (!gl) return { image: null, vendor: null, renderer: null };
+  const vs = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vs, 'attribute vec2 p;varying vec2 v;void main(){v=p;gl_Position=vec4(p,0,1);}'); gl.compileShader(vs);
+  const fs = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fs, 'precision mediump float;varying vec2 v;void main(){gl_FragColor=vec4(sin(v.x*9.)*.5+.5,v.y*.5+.5,cos(v.y*5.)*.5+.5,1);}'); gl.compileShader(fs);
+  const pr = gl.createProgram(); gl.attachShader(pr, vs); gl.attachShader(pr, fs); gl.linkProgram(pr); gl.useProgram(pr);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.9, -.9, .9, -.6, 0, .9]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  gl.clearColor(.1, .2, .3, 1); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const d = gl.getExtension('WEBGL_debug_renderer_info');
+  const px = new Uint8Array(128 * 128 * 4);
+  gl.readPixels(0, 0, 128, 128, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  return {
+    pixels: px,
+    image: c.toDataURL(),
+    vendor: d ? gl.getParameter(d.UNMASKED_VENDOR_WEBGL) : gl.getParameter(gl.VENDOR),
+    renderer: d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+    params: [gl.MAX_TEXTURE_SIZE, gl.MAX_RENDERBUFFER_SIZE, gl.MAX_VERTEX_UNIFORM_VECTORS, gl.MAX_VARYING_VECTORS]
+      .map(k => gl.getParameter(k)).join(','),
+  };
+}
+async function solidHash() {
+  // a single-colour WebGL buffer: real hardware always returns the same bytes
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+  const gl = c.getContext('webgl', { preserveDrawingBuffer: true });
+  if (!gl) return null;
+  gl.clearColor(1, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  const px = new Uint8Array(64 * 64 * 4); gl.readPixels(0, 0, 64, 64, gl.RGBA, gl.UNSIGNED_BYTE, px);
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', px))].slice(0, 8).map(v => v.toString(16).padStart(2, '0')).join('');
+}
+async function audio() {
+  const ac = new OfflineAudioContext(1, 44100, 44100);
+  const o = ac.createOscillator(); o.type = 'triangle'; o.frequency.value = 10000;
+  const cp = ac.createDynamicsCompressor();
+  cp.threshold.value = -50; cp.knee.value = 40; cp.ratio.value = 12; cp.attack.value = 0; cp.release.value = 0.25;
+  o.connect(cp); cp.connect(ac.destination); o.start(0);
+  const buf = await ac.startRendering(); const d = buf.getChannelData(0);
+  let s = 0; for (let i = 4500; i < 5000; i++) s += Math.abs(d[i]);
+  return s.toString();
+}
+function fonts() {
+  const list = ['Arial', 'Helvetica Neue', 'Menlo', 'Segoe UI', 'Calibri', 'Cambria', 'Consolas', 'Tahoma',
+    'Ubuntu', 'DejaVu Sans', 'Liberation Sans', 'Noto Sans', 'Avenir', 'Futura', 'Gill Sans', 'Optima',
+    'Georgia', 'Verdana', 'Courier New', 'Times New Roman', 'Trebuchet MS', 'Impact', 'Comic Sans MS',
+    'Lucida Console', 'Franklin Gothic', 'Palatino', 'Baskerville', 'Didot', 'Copperplate', 'Papyrus'];
+  return list.filter(f => document.fonts.check(`12px "${f}"`)).join(',');
+}
+function rects() {
+  const s = document.createElement('span');
+  s.style.cssText = 'font: 17px Georgia; position:absolute; left:-999px';
+  s.textContent = 'The quick brown fox ¡ÿ ∑ 😃';
+  document.body.appendChild(s);
+  const r = s.getBoundingClientRect(); s.remove();
+  return [r.width, r.height].join('x');
+}
+async function media() {
+  try {
+    if (location.search.includes('gum=1')) {
+      try { (await navigator.mediaDevices.getUserMedia({ audio: true, video: true })).getTracks().forEach(t => t.stop()); }
+      catch (e) { console.log('gum', e); }
+    }
+    const d = await navigator.mediaDevices.enumerateDevices();
+    const c = { audioinput: 0, videoinput: 0, audiooutput: 0 };
+    d.forEach(x => c[x.kind] = (c[x.kind] || 0) + 1);
+    return `cam ${c.videoinput} / mic ${c.audioinput} / sp ${c.audiooutput}`;
+  } catch (e) { return 'error ' + e; }
+}
+function webrtcIps() {
+  return new Promise(res => {
+    const ips = new Set();
+    let pc;
+    try { pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }); }
+    catch (e) { return res('blocked'); }
+    pc.createDataChannel('x');
+    pc.onicecandidate = e => {
+      if (!e.candidate) return;
+      const m = e.candidate.candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3}|[0-9a-f:]{6,})/i);
+      if (m) ips.add(m[1]);
+    };
+    pc.createOffer().then(o => pc.setLocalDescription(o));
+    setTimeout(() => { try { pc.close(); } catch (e) {} res([...ips].join(', ') || 'none'); }, 2500);
+  });
+}
+(async () => {
+  const g = webgl();
+  const r = {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    threads: navigator.hardwareConcurrency,
+    deviceMemory: navigator.deviceMemory ?? 'n/a (Firefox)',
+    languages: navigator.languages.join(','),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    screen: `${screen.width}x${screen.height} @${devicePixelRatio}`,
+    canvasHash: await sha(canvas2d()),
+    canvasRepeatSame: canvas2d() === canvas2d(),
+    webglImageHash: g.image ? await sha(g.image) : null,
+    webglPixelsHash: g.pixels ? [...new Uint8Array(await crypto.subtle.digest('SHA-256', g.pixels))].slice(0, 8).map(v => v.toString(16).padStart(2, '0')).join('') : null,
+    webglSolidHash: await solidHash(),
+    webglVendor: g.vendor,
+    webglRenderer: g.renderer,
+    webglParams: g.params,
+    audioHash: await sha(await audio()),
+    fonts: await sha(fonts()),
+    fontList: fonts(),
+    clientRects: rects(),
+    mediaDevices: await media(),
+    webrtc: await webrtcIps(),
+  };
+  document.getElementById('t').innerHTML = Object.entries(r)
+    .map(([k, v]) => `<tr><td>${k}</td><td>${String(v).replace(/</g, '&lt;')}</td></tr>`).join('');
+  document.getElementById('out').textContent = JSON.stringify(r);
+  document.title = 'done';
+})();
+</script>
+</body>
+</html>
