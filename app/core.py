@@ -827,28 +827,162 @@ def dock_label(p: Dict[str, Any]) -> str:
     last = name.split()[-1] if name else ""
     if last and len(last) <= 4:      # "profile 3" -> "3", "mac B" -> "B"
         return last.upper()
-    return name[:2].upper()
+    return name[:3].upper()
 
 
-DOCK_MARK = "// FOXCLI-DOCK-BADGE v3"
+DOCK_MARK = "// FOXCLI-DOCK-BADGE v6"
 DOCK_HOOK = DOCK_MARK + """
-// Added by FoxLogin: badges the Dock icon with FOXCLI_DOCK_BADGE so several
-// profile windows can be told apart. No-op without the variable or off macOS.
-// Firefox clears the badge during startup, so it is re-applied by a timer.
+// Added by FoxLogin: shows FOXCLI_DOCK_BADGE as a small label left of the address
+// bar so several profile windows can be told apart. No-op without the variable.
+// With FOXCLI_DOCK_TEXT set it also badges the Dock icon with the text (used only
+// when the profile's own icon could not be drawn).
 (() => {
   try {
     const text = getenv("FOXCLI_DOCK_BADGE");
     if (!text) return;
-    const dock = Components.classes["@mozilla.org/widget/macdocksupport;1"]
-      .getService(Components.interfaces.nsIMacDockSupport);
-    const timer = Components.classes["@mozilla.org/timer;1"].createInstance(Components.interfaces.nsITimer);
-    globalThis.__foxcliDockTimer = timer;
-    timer.initWithCallback({ notify() { try { if (dock.badgeText != text) dock.badgeText = text; } catch (e) {} } },
-      1000, Components.interfaces.nsITimer.TYPE_REPEATING_SLACK);
+    const Cc = Components.classes, Ci = Components.interfaces;
+    const HTML = "http://www.w3.org/1999/xhtml";
+    const addLabel = (win) => {
+      try {
+        const doc = win.document;
+        const bar = doc.getElementById("urlbar-container");
+        if (!bar || doc.getElementById("foxcli-badge")) return;
+        const el = doc.createElementNS(HTML, "div");
+        el.id = "foxcli-badge";
+        el.textContent = text;
+        el.title = "FoxLogin profile " + text;
+        el.style.cssText = "display:flex;align-items:center;justify-content:center;align-self:center;" +
+          "box-sizing:border-box;flex:none;height:24px;min-width:24px;padding:0 7px;margin:0 8px 0 4px;" +
+          "border-radius:12px;background:#e5322d;color:#fff;font:600 13px/1 -apple-system,sans-serif;" +
+          "user-select:none;-moz-window-dragging:no-drag;";
+        bar.parentNode.insertBefore(el, bar);
+      } catch (e) {}
+    };
+    let dock = null;
+    if (getenv("FOXCLI_DOCK_TEXT")) {
+      try { dock = Cc["@mozilla.org/widget/macdocksupport;1"].getService(Ci.nsIMacDockSupport); } catch (e) {}
+    }
+    const setDock = (force) => {
+      try {
+        if (!dock) return;
+        if (force) dock.badgeText = "";
+        if (force || dock.badgeText != text) dock.badgeText = text;
+      } catch (e) {}
+    };
+    const obs = Cc["@mozilla.org/observer-service;1"].getService(Ci.nsIObserverService);
+    globalThis.__foxcliObs = { observe(win) { addLabel(win); setDock(true); } };
+    obs.addObserver(globalThis.__foxcliObs, "browser-delayed-startup-finished");
+    if (dock) {
+      const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
+      globalThis.__foxcliDockTimer = timer;
+      timer.initWithCallback({ notify() { setDock(false); } }, 1000, Ci.nsITimer.TYPE_REPEATING_SLACK);
+    }
   } catch (e) {}
 })();
 // FOXCLI-DOCK-BADGE end
 """
+
+
+def _badged_icns(src: Path, label: str, out: Path) -> None:
+    """Write `src` (an .icns) to `out` with `label` drawn in a red badge at the top right."""
+    import subprocess
+    import tempfile
+
+    from AppKit import (
+        NSBezierPath, NSBitmapImageRep, NSColor, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
+        NSGraphicsContext, NSImage, NSMakeRect, NSPNGFileType, NSString, NSZeroRect,
+    )
+
+    base = NSImage.alloc().initWithContentsOfFile_(str(src))
+    if base is None:
+        raise OSError(f"cannot read {src}")
+    red, white = NSColor.colorWithSRGBRed_green_blue_alpha_(0.898, 0.196, 0.176, 1), NSColor.whiteColor()
+
+    def render(px: int) -> bytes:
+        rep = NSBitmapImageRep.alloc().initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel_(
+            None, px, px, 8, 4, True, False, "NSCalibratedRGBColorSpace", 0, 0)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.setCurrentContext_(NSGraphicsContext.graphicsContextWithBitmapImageRep_(rep))
+        base.drawInRect_fromRect_operation_fraction_(NSMakeRect(0, 0, px, px), NSZeroRect, 2, 1.0)
+        h = px * 0.36
+        font = NSFont.boldSystemFontOfSize_(h * (0.66 if len(label) < 3 else 0.56))
+        attrs = {NSFontAttributeName: font, NSForegroundColorAttributeName: white}
+        text = NSString.stringWithString_(label)
+        tw, th = text.sizeWithAttributes_(attrs)
+        w = max(h, tw + h * 0.5)
+        x, y = px * 0.99 - w, px * 0.99 - h
+        ring = h * 0.07
+        white.setFill()
+        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(NSMakeRect(x - ring, y - ring, w + 2 * ring, h + 2 * ring),
+                                                                (h + 2 * ring) / 2, (h + 2 * ring) / 2).fill()
+        red.setFill()
+        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(NSMakeRect(x, y, w, h), h / 2, h / 2).fill()
+        text.drawAtPoint_withAttributes_((x + (w - tw) / 2, y + (h - th) / 2), attrs)
+        NSGraphicsContext.restoreGraphicsState()
+        return bytes(rep.representationUsingType_properties_(NSPNGFileType, {}))
+
+    with tempfile.TemporaryDirectory() as tmp:
+        iconset = Path(tmp) / "badge.iconset"
+        iconset.mkdir()
+        for size in (16, 32, 128, 256, 512):
+            (iconset / f"icon_{size}x{size}.png").write_bytes(render(size))
+            (iconset / f"icon_{size}x{size}@2x.png").write_bytes(render(size * 2))
+        subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(out)], check=True, capture_output=True)
+
+
+def dock_app(p: Dict[str, Any]) -> Optional[str]:
+    """Executable of a private copy of this profile's Camoufox build with the badge
+    drawn into its icon, or None (macOS only; no badge, or the copy failed).
+
+    The Dock does not render the badge text Camoufox sets on its own tile, but it
+    always draws the app bundle's icon. A copy per profile also gives every
+    profile its own Dock tile. The copy is an APFS clone, so it costs almost no
+    disk space, and it is rebuilt when the build or the badge changes."""
+    import plistlib
+    import re
+    import subprocess
+    import sys
+
+    if sys.platform != "darwin":
+        return None
+    label = dock_label(p)
+    if not label:
+        return None
+    try:
+        from camoufox.multiversion import find_installed_version
+        from camoufox.pkgman import launch_path
+
+        spec = browser_spec(p)
+        exe = Path(launch_path(find_installed_version(spec) if spec else None)).resolve()
+        src = exe.parents[2]                                  # .../Camoufox.app
+        dest = _pdir(p["id"]) / "dock" / "Camoufox.app"
+        stamp = dest.parent / "stamp"
+        cfg_mtime = (src / "Contents/Resources/camoufox.cfg").stat().st_mtime   # changes with the badge hook
+        key = f"v2|{src}|{(src / 'Contents/Info.plist').stat().st_mtime}|{cfg_mtime}|{label}"
+        if not (stamp.exists() and stamp.read_text() == key and (dest / "Contents/MacOS/camoufox").exists()):
+            shutil.rmtree(dest.parent, ignore_errors=True)
+            dest.parent.mkdir(parents=True)
+            if subprocess.run(["cp", "-cR", str(src), str(dest)], capture_output=True).returncode != 0:
+                shutil.rmtree(dest, ignore_errors=True)       # not APFS: plain copy
+                shutil.copytree(src, dest, symlinks=True)
+            info = dest / "Contents/Info.plist"
+            plist = plistlib.loads(info.read_bytes())
+            plist["CFBundleIdentifier"] = "org.mozilla.camoufox." + re.sub(r"[^A-Za-z0-9]", "", p["id"])
+            plist["CFBundleDisplayName"] = plist["CFBundleName"] = f"Camoufox {label}"
+            plist.pop("CFBundleIconName", None)       # macOS prefers the asset catalog icon over firefox.icns
+            (dest / "Contents/Resources/Assets.car").unlink(missing_ok=True)
+            info.write_bytes(plistlib.dumps(plist))
+            icon = dest / "Contents/Resources" / plist.get("CFBundleIconFile", "firefox.icns")
+            if icon.suffix != ".icns":
+                icon = icon.with_suffix(".icns")
+            icon.unlink()
+            _badged_icns(src / "Contents/Resources" / icon.name, label, icon)
+            stamp.write_text(key)
+        return str(dest / "Contents/MacOS/camoufox")
+    except Exception as e:
+        print("dock icon failed:", e, file=sys.stderr)
+        shutil.rmtree(_pdir(p["id"]) / "dock", ignore_errors=True)
+        return None
 
 
 def install_dock_hook() -> None:

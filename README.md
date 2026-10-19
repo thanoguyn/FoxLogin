@@ -117,12 +117,14 @@ host:port
 
 ### Dock badge (macOS)
 
-The Camoufox icon in the Dock shows a red badge with the profile's number or letters, so you can tell profile windows apart.
+Each profile window can be told apart in two places:
 
-- **Auto** derives the badge from the name ("profile 3" → `3`).
-- **Custom** takes up to 4 characters. **Off** shows no badge.
-- Changes apply from the next launch.
-- The background Python processes no longer add their own Dock icon.
+- **Dock icon.** macOS does not draw the badge text a Camoufox window sets on its Dock tile, so each profile runs a private copy of its Camoufox build whose icon already shows a red badge with the number or letters. Every profile gets its own Dock tile named "Camoufox 3". The copy is an APFS clone (almost no extra disk space) kept in `data/profiles/<id>/dock/` and rebuilt when the badge or the browser build changes.
+- **Address bar.** A small red label just left of the address bar shows the same text.
+
+Settings: **Auto** derives the text from the name ("profile 3" → `3`, "mac B" → `B`). **Custom** takes up to 4 characters. **Off** shows nothing. Changes apply from the next launch.
+
+The background Python processes no longer add their own Dock icon.
 
 ### API & Automation
 
