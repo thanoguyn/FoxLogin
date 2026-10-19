@@ -15,7 +15,8 @@ Mục tiêu: người dùng tải một file cài đặt, cài xong mở như ap
 - Lần đầu mở app có màn hình cài core Camoufox.
 - `packaging/foxlogin.spec` cho PyInstaller và `packaging/build.py` để build venv riêng theo từng kiến trúc rồi tạo bộ cài: dmg, Inno Setup, AppImage.
 - Icon tạm nằm ở `packaging/make_icons.py`.
-- GitHub Actions build đủ 5 bản: macOS arm64/Intel, Windows x64, Linux x86_64/arm64. Mỗi bản có smoke test; push tag `v*` thì tự tạo Release.
+- GitHub Actions build đủ 5 bản: macOS arm64/Intel, Windows x64, Linux x86_64/arm64, cùng 4 bản Tauri (xem [PACKAGING-TAURI.md](PACKAGING-TAURI.md)). Mỗi bản có smoke test; push tag `v*` thì tự tạo một Release chứa cả hai.
+- Ra bản mới: sửa version ở `app/core.py`, `packaging/foxlogin.spec`, `packaging/windows/foxlogin.iss`, `packaging/tauri/package.json`, `packaging/tauri/src-tauri/Cargo.toml` và `tauri.conf.json`, rồi push tag `vX.Y.Z` (CI kiểm tra tag khớp `app/core.py`).
 
 Đã kiểm tra trên máy dev (macOS Apple Silicon):
 - Bản arm64 build xong:

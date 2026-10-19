@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The loading page is local; the app UI is served by the backend on 127.0.0.1 and needs no IPC.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

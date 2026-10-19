@@ -236,6 +236,8 @@ FoxLogin also ships as a desktop app: a native window, no Python needed.
 - **Closing the window** leaves running profiles open.
 - **Unsigned builds.** On macOS, right-click › Open the first time. On Windows, SmartScreen asks for "More info › Run anyway". See [docs/PACKAGING.md](docs/PACKAGING.md) for signing.
 
+The same app is also built with a [Tauri](https://tauri.app) shell around the same Python backend. See [docs/PACKAGING-TAURI.md](docs/PACKAGING-TAURI.md) for its design, build steps and test results.
+
 ## Project layout
 
 ```

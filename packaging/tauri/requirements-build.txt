@@ -1,0 +1,2 @@
+# Extra packages for the Tauri desktop build (on top of ../../requirements.txt)
+pyinstaller>=6.10

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Profiles may use the camera/mic (WebRTC sites); macOS asks the user once -->
+  <key>NSCameraUsageDescription</key>
+  <string>Browser profiles can use the camera when a website asks.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Browser profiles can use the microphone when a website asks.</string>
+</dict>
+</plist>

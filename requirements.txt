@@ -2,6 +2,7 @@ camoufox[geoip]==0.5.8
 playwright>=1.55
 fastapi>=0.110
 uvicorn>=0.29
+websockets>=12   # /ws/<id> automation proxy (uvicorn needs it for WebSocket routes)
 requests
 PySocks
 pyobjc-framework-Cocoa; sys_platform == "darwin"

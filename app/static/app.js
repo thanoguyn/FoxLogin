@@ -308,7 +308,7 @@ async function patchProfile(id, body) {
   return p;
 }
 async function deleteProfiles(ids) {
-  if (!confirm(`Delete ${ids.length} profile(s)? Browser data and cookies are removed too.`)) return;
+  if (!(await ask(`Delete ${ids.length} profile(s)? Browser data and cookies are removed too.`))) return;
   await api('/api/profiles/delete', { body: ids });
   ids.forEach(i => S.selected.delete(i));
   await load(); toast(`Deleted ${ids.length} profile(s)`);
@@ -331,6 +331,17 @@ function modal(title, html, onOk, okLabel = 'OK', wide = false) {
   };
   const first = $('#modalBody input, #modalBody textarea');
   if (first) first.focus();
+}
+
+// In-page confirm. window.confirm is a silent no-op in some desktop webviews
+// (WKWebView in the Tauri app), so destructive actions ask through the modal.
+function ask(text, okLabel = 'OK') {
+  return new Promise(resolve => {
+    modal('Please confirm', `<p>${esc(text)}</p>`, () => resolve(true), okLabel);
+    const no = () => resolve(false);
+    $('#modalCancel').addEventListener('click', no, { once: true });
+    $('#modalX').addEventListener('click', no, { once: true });
+  });
 }
 
 function cookiesModal(id) {
@@ -871,7 +882,7 @@ async function onFormClick(e) {
     } catch (err) { toast(err.message, true); }
   }
   if (dact === 'reset') {
-    if (!confirm('Reset this profile\'s masks, location and extension settings to the defaults from Settings?')) return;
+    if (!(await ask('Reset this profile\'s masks, location and extension settings to the defaults from Settings?'))) return;
     try {
       await flushSave();
       const p = await api(`/api/profiles/${obj.id}/reset`, { method: 'POST' });
@@ -1020,7 +1031,7 @@ function renderSettings() {
   `;
   renderSettingsTemplate();
   $('#btnResetDefaults').onclick = async () => {
-    if (!confirm('Reset the default settings for new profiles to the recommended values?')) return;
+    if (!(await ask('Reset the default settings for new profiles to the recommended values?'))) return;
     S.settings = await api('/api/settings/reset', { method: 'POST' }); renderSettings(); toast('Defaults reset to recommended');
   };
   $('#showPre').onchange = e => { store.set('fl.showPre', e.target.checked); renderSettings(); };
@@ -1039,7 +1050,7 @@ async function browserAction(btn) {
   try {
     if (act === 'default') { S.settings = await api('/api/browsers/default', { body: { version: v } }); toast(`New launches use ${v}`); }
     if (act === 'remove') {
-      if (!confirm(`Remove Camoufox ${v}? Profiles pinned to it fall back to the default.`)) return;
+      if (!(await ask(`Remove Camoufox ${v}? Profiles pinned to it fall back to the default.`))) return;
       await api('/api/browsers/remove', { body: { version: v, repo: btn.dataset.r } }); toast(`Removed ${v}`);
     }
     if (act === 'install') { await api('/api/browsers/install', { body: { version: v, repo: btn.dataset.r } }); toast(`Downloading ${v} (≈1.2 GB)…`); }
@@ -1209,7 +1220,7 @@ function bind() {
   $('#btnPxCheckAll').onclick = () => checkProxies(S.proxies.map(x => x.id));
   $('#btnPxCheck').onclick = () => checkProxies([...S.pxSelected]);
   $('#btnPxDelete').onclick = async () => {
-    if (!confirm(`Delete ${S.pxSelected.size} proxies from the list? Profiles keep their current proxy.`)) return;
+    if (!(await ask(`Delete ${S.pxSelected.size} proxies from the list? Profiles keep their current proxy.`))) return;
     await api('/api/proxies/delete', { body: [...S.pxSelected] }); S.pxSelected.clear(); loadProxies();
   };
   $('#pxAll').onchange = e => { S.proxies.forEach(x => e.target.checked ? S.pxSelected.add(x.id) : S.pxSelected.delete(x.id)); renderAll(); };
@@ -1263,34 +1274,4 @@ function bind() {
   await pollStates();
   firstRunCheck();
   setInterval(pollStates, 2000);
-  firstRun();
 })();
-
-/* First launch of the packaged app: no Camoufox build is installed yet */
-async function firstRun() {
-  const b = await api('/api/browsers').catch(() => null);
-  if (!b || b.installed.length || (b.jobs.setup && b.jobs.setup.state === 'done')) return;
-  const show = (job) => {
-    const failed = job && job.state === 'failed';
-    modal('Install the browser core', `
-      <p>FoxLogin runs every profile on <b>Camoufox</b>, a hardened Firefox. It is downloaded once
-        (about 1.2 GB, plus the GeoIP database) and shared by all profiles.</p>
-      ${job ? `<p>${failed ? '<span class="bad">Install failed.</span> Check your connection and try again.' : 'Downloading… you can keep using the app meanwhile.'}</p>
-        <div class="joblog">${esc(job.log || 'Starting…')}</div>` : ''}`,
-      job && !failed ? null : async () => {
-        await api('/api/browsers/setup', { method: 'POST' }).catch(e => toast(e.message, true));
-        setTimeout(poll, 500); return false;
-      }, failed ? 'Retry' : 'Install now', true);
-  };
-  const poll = async () => {
-    const st = await api('/api/browsers').catch(() => null);
-    const job = st && st.jobs.setup;
-    if (st && st.installed.length && (!job || job.state === 'done')) {
-      $('#modal').hidden = true; toast('Camoufox installed. You can run profiles now.'); return;
-    }
-    if (!$('#modal').hidden || job?.state === 'failed') show(job);
-    if (job && job.state === 'running') setTimeout(poll, 1500);
-  };
-  show(b.jobs.setup && b.jobs.setup.state !== 'done' ? b.jobs.setup : null);
-  if (b.jobs.setup && b.jobs.setup.state === 'running') setTimeout(poll, 1500);
-}

@@ -56,6 +56,8 @@ try:
     out = asyncio.run(drive(r["wsUrl"]))
     print("POST /browser/stop-profile ->", api("/browser/stop-profile", "POST", {"profileId": p["id"]})["state"])
 finally:
+    # Stop first: a runner left behind by a failed check would outlive the test
+    api(f"/api/v1/profiles/{p['id']}/stop", "POST")
     api(f"/api/v1/profiles/{p['id']}", "DELETE")
 
 checks = [
