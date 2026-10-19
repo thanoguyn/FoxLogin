@@ -115,16 +115,21 @@ host:port
 - **API token** (optional). When it is set, every `/api/v1` and `/browser` call needs `Authorization: Bearer <token>` or `?token=<token>`.
 - **Reset to recommended** restores the recommended defaults. Inside a profile, **Reset to defaults** applies the current defaults to that profile. It keeps the name, proxy, OS and device.
 
-### Dock badge (macOS)
+### Profile badge
 
 Each profile window can be told apart in two places:
 
-- **Dock icon.** macOS does not draw the badge text a Camoufox window sets on its Dock tile, so each profile runs a private copy of its Camoufox build whose icon already shows a red badge with the number or letters. Every profile gets its own Dock tile named "Camoufox 3". The copy is an APFS clone (almost no extra disk space) kept in `~/Library/Caches/FoxLogin/browsers/<id>/` (outside Documents, which macOS protects and which breaks the browser's bundled fonts) and rebuilt when the badge or the browser build changes.
-- **Address bar.** A small red label just left of the address bar shows the same text.
+- **App icon.**
+  - *macOS:* each profile runs a private copy of its Camoufox build. Its Dock icon shows the number or letters (up to 4 characters) large on a round tile, with the Camoufox icon shrunk to a badge in the corner, and every profile gets its own Dock tile named "Camoufox 3". The copy is an APFS clone (almost no extra disk space; see `cp -c`) kept in `~/Library/Caches/FoxLogin/browsers/<id>/` (outside Documents, which macOS protects and which breaks the browser's bundled fonts) and rebuilt when the badge or the browser build changes. macOS does not draw the badge text a Camoufox window sets on its own Dock tile, hence the copy.
+  - *Windows:* the text is shown as a taskbar overlay icon.
+  - *Linux:* the text is added to the window title as `[3]`.
+- **Address bar.** A small red label just left of the address bar shows the same text on every system.
 
-Settings: **Auto** derives the text from the name ("profile 3" → `3`, "mac B" → `B`). **Custom** takes up to 4 characters. **Off** shows nothing. Changes apply from the next launch.
+Settings: **Auto** derives the text from the name ("profile 3" → `3`, "mac B" → `B`). **Custom** takes up to 4 characters. **Off** shows nothing. Changes apply from the next launch. The background Python processes no longer add their own Dock icon.
 
-The same copy makes Google the default search engine (stock Camoufox searches 127.0.0.1). The background Python processes no longer add their own Dock icon.
+### Default search engine
+
+Stock Camoufox has a search engine called "None" that points at 127.0.0.1, so anything typed in the address bar went to localhost. FoxLogin makes Google the default: on macOS in each profile's browser copy, on Windows and Linux in the installed Camoufox builds (`distribution/policies.json`, re-applied before every launch).
 
 ### API & Automation
 
