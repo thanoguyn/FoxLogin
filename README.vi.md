@@ -34,6 +34,7 @@ Khi tắt hoặc khởi động lại server, các browser đang mở vẫn ch�
 - **Import profiles**: mỗi dòng có dạng `tên|proxy|ghi chú|folder|os|start_url`, trong đó chỉ tên là bắt buộc.
 - **Settings**
   - Cấu hình mặc định cho profile mới: OS, ngôn ngữ, timezone, geolocation, WebRTC, độ phân giải, các mask, extension.
+  - Lần đầu mở app, FoxLogin hiện danh sách bản Camoufox để tải (chọn sẵn bản stable mới nhất). Nếu bỏ qua, bản stable mới nhất sẽ được tải khi Run profile đầu tiên, tiến độ hiện trên nút Run và thanh thông báo phía trên.
   - **Browser core**: xem các bản Camoufox đã cài, *Check for updates*, cài bản mới hơn hoặc cũ hơn (≈1,2 GB mỗi bản), chọn bản mặc định, gỡ bản không dùng. Từng profile cũng có thể chọn bản riêng.
   - **API token** (tuỳ chọn).
 

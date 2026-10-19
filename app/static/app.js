@@ -87,7 +87,15 @@ async function loadProxies() { S.proxies = await api('/api/proxies'); renderAll(
 
 async function pollStates() {
   try {
-    const { states: st, errors } = await api('/api/states');
+    const { states: st, errors, download } = await api('/api/states');
+    const dlChanged = JSON.stringify(S.download) !== JSON.stringify(download);
+    const dlDone = S.download && !download;
+    S.download = download;
+    if (dlChanged) renderDownload();
+    if (dlDone) {
+      S.browsers = await api('/api/browsers');
+      if (S.page === 'settings') renderSettings();
+    }
     for (const [id, msg] of Object.entries(errors)) {
       const p = S.profiles.find(x => x.id === id);
       toast(`${p ? p.name : id}: ${msg}`, true);
@@ -98,7 +106,77 @@ async function pollStates() {
       if (p.state !== s) { p.state = s; changed = true; }
     }
     if (changed) await load();
+    else if (dlChanged && S.profiles.some(p => p.state === 'downloading')) renderAll();
   } catch (e) { /* server restarting */ }
+}
+
+/* ------------------------------------------------- browser download */
+// The Camoufox browser is a separate ~700 MB download: on a fresh install the
+// first Run waits for it, so show how far it got instead of a silent button.
+function dlShort() {
+  const pr = S.download && S.download.progress;
+  if (!pr) return '⬇ …';
+  return pr.pct >= 100 ? 'Installing…' : `⬇ ${pr.pct}%`;
+}
+function renderDownload() {
+  const d = S.download; const el = $('#dlBanner');
+  el.hidden = !d;
+  if (!d) return;
+  const pr = d.progress;
+  const waiting = S.profiles.filter(p => p.state === 'downloading').length;
+  const done = !pr ? 'Preparing…' : pr.pct >= 100 ? 'Installing…' : `${pr.pct}% · ${pr.done}/${pr.total} ${pr.unit}`;
+  el.innerHTML = `<b>Downloading the Camoufox browser${d.version ? ' ' + esc(d.version) : ''}</b>
+    <div class="bar ${pr ? '' : 'indef'}"><span style="width:${pr ? pr.pct : 0}%"></span></div>
+    <span>${esc(done)}</span>
+    <span class="muted">${waiting ? `${waiting} profile${waiting > 1 ? 's' : ''} will open when it finishes.` : 'One-time download; profiles can run when it finishes.'}</span>`;
+}
+const cmpVer = (x, y) => x.localeCompare(y, undefined, { numeric: true });
+
+async function firstRunCheck() {
+  try { S.browsers = await api('/api/browsers'); } catch (e) { return; }
+  if (!S.browsers.installed.length && !S.download) browserPickModal();
+}
+async function browserPickModal() {
+  const title = 'Download the Camoufox browser';
+  const open = () => !$('#modal').hidden && $('#modalTitle').textContent === title;
+  modal(title, '<p class="muted">Loading the version list…</p>', async () => {
+    const v = $('input[name=brPick]:checked')?.value;
+    if (!v) return false;
+    await api('/api/browsers/install', { body: { version: v, repo: 'official' } });
+    toast(`Downloading Camoufox ${v}…`);
+    pollStates();
+  }, 'Download');
+  $('#modalOk').disabled = true;
+  let b = S.browsers;
+  if (!b.available.some(v => v.repo === 'official')) {
+    try { await api('/api/browsers/sync', { method: 'POST' }); } catch (e) { /* already checking */ }
+    for (let i = 0; i < 80 && open(); i++) {
+      await new Promise(r => setTimeout(r, 1500));
+      b = S.browsers = await api('/api/browsers');
+      if (!b.jobs.sync || b.jobs.sync.state !== 'running') break;
+    }
+  }
+  if (!open()) return;
+  const draw = () => {
+    const pre = $('#pickPre')?.checked || false;
+    const all = b.available.filter(v => v.repo === 'official').sort((x, y) => cmpVer(y.version, x.version));
+    const latest = all.find(v => !v.prerelease);
+    const list = all.filter(v => pre || !v.prerelease).slice(0, 20);
+    const size = latest && latest.size ? ` (about ${(latest.size / 1073741824).toFixed(1)} GB)` : '';
+    $('#modalOk').disabled = !list.length;
+    $('#modalBody').innerHTML = list.length ? `
+      <p>Profiles run in Camoufox, a Firefox-based browser that is downloaded once${size}. Pick a build; the newest stable one is selected.</p>
+      <div class="ver-pick">${list.map(v => `<label>
+        <input type="radio" name="brPick" value="${esc(v.version)}" ${v === latest ? 'checked' : ''}>
+        <b>${esc(v.version)}</b> <span class="tag ${v.prerelease ? 'amber' : 'green'}">${v.prerelease ? 'prerelease' : 'stable'}</span>
+        ${v === latest ? '<span class="tag green">latest</span>' : ''}
+        <span class="sub">${esc((v.date || '').slice(0, 10))}${v.size ? ' · ' + Math.round(v.size / 1048576) + ' MB' : ''}</span></label>`).join('')}</div>
+      <label class="sub" style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="pickPre" ${pre ? 'checked' : ''}> Show prerelease builds</label>
+      <p class="sub">Skip this and the newest stable build is downloaded the first time you run a profile. Settings › Browser core manages builds later.</p>`
+      : '<p>Could not load the version list (no internet?). The browser is downloaded the first time you run a profile.</p>';
+    const cb = $('#pickPre'); if (cb) cb.onchange = draw;
+  };
+  draw();
 }
 
 /* =============================================================== routing */
@@ -146,6 +224,7 @@ function cellFor(key, p) {
   switch (key) {
     case 'state': {
       const running = p.state === 'running';
+      if (p.state === 'downloading') return '<td><span class="state downloading" title="Waiting for the Camoufox browser download"><i></i>starting</span></td>';
       return `<td><span class="state ${running ? 'running' : ''}"><i></i>${running ? (p.port ? 'running · API' : 'running') : 'ready'}</span></td>`;
     }
     case 'notes': return `<td class="notes-cell muted" data-cell="notes" title="${esc(p.notes)}">${p.notes ? esc(p.notes) : '<span class="add-note">+ Add note</span>'}</td>`;
@@ -187,13 +266,14 @@ function renderProfiles() {
   const list = visible();
   $('#empty').hidden = S.profiles.length > 0;
   $('#rows').innerHTML = list.map(p => {
-    const running = p.state === 'running'; const busy = S.busy.has(p.id);
+    const running = p.state === 'running'; const busy = S.busy.has(p.id); const dl = p.state === 'downloading';
     return `<tr data-id="${p.id}" class="${S.selected.has(p.id) ? 'selected' : ''}">
       <td class="c-chk"><input type="checkbox" class="chk" ${S.selected.has(p.id) ? 'checked' : ''}></td>
       <td class="name" data-cell="name" title="${esc(p.name)} (double-click to rename)">${p.pinned ? '<span class="pin-ico">●</span>' : ''}${esc(p.name)}</td>
       <td><div class="row-actions">
         <button class="settings-link" data-act="edit" title="Open quick profile settings">Settings ›</button>
-        <button class="btn-run ${running ? 'stop' : ''} ${busy ? 'busy' : ''}" data-act="${running ? 'stop' : 'run'}">${busy ? '…' : running ? 'Stop' : 'Run'}</button>
+        <button class="btn-run ${running ? 'stop' : ''} ${dl ? 'dl' : ''} ${busy ? 'busy' : ''}" data-act="${running || dl ? 'stop' : 'run'}"
+          ${dl ? 'title="Downloading the Camoufox browser; the profile opens when it finishes. Click to cancel the start."' : ''}>${busy ? '…' : dl ? dlShort() : running ? 'Stop' : 'Run'}</button>
         <button class="dots" data-act="menu">•••</button>
       </div></td>
       ${cols.map(c => cellFor(c.key, p)).join('')}
@@ -207,8 +287,12 @@ function renderProfiles() {
 async function runProfile(id) {
   S.busy.add(id); renderAll();
   try {
-    await api(`/api/profiles/${id}/run`, { method: 'POST' });
-    const p = S.profiles.find(x => x.id === id); if (p) p.state = 'running';
+    const r = await api(`/api/profiles/${id}/run`, { method: 'POST' });
+    const p = S.profiles.find(x => x.id === id); if (p) p.state = r.state;
+    if (r.state === 'downloading') {
+      toast('Downloading the Camoufox browser first (one time). The profile opens when it finishes.');
+      pollStates();
+    }
   } catch (e) { toast(e.message, true); }
   S.busy.delete(id); renderAll();
 }
@@ -369,7 +453,7 @@ function openRowMenu(id, anchor) {
   m.innerHTML = [
     item('edit', 'settings', 'Settings'), item('folder', 'folder', 'Folders'), item('clone', 'clone', 'Clone'),
     '<div class="sep"></div>',
-    item('run', 'play', p.state === 'running' ? 'Stop' : 'Run'), item('cookies', 'cookie', 'Cookies'),
+    item('run', 'play', p.state === 'ready' ? 'Run' : 'Stop'), item('cookies', 'cookie', 'Cookies'),
     item('random', 'dice', 'Random fingerprint', p.state === 'running'),
     item('refresh', 'refresh', 'Refresh fingerprint', p.state === 'running'),
     item('browser', 'update', 'Update browser'),
@@ -389,7 +473,7 @@ async function rowAction(act, id) {
   if (act === 'edit') openDrawer('edit', p);
   if (act === 'folder') moveToFolder([id]);
   if (act === 'clone') { const c = await api(`/api/profiles/${id}/clone`, { method: 'POST' }); await load(); toast(`Cloned as ${c.name}`); }
-  if (act === 'run') p.state === 'running' ? stopProfile(id) : runProfile(id);
+  if (act === 'run') p.state === 'ready' ? runProfile(id) : stopProfile(id);
   if (act === 'cookies') cookiesModal(id);
   if (act === 'random') { await api(`/api/profiles/${id}/randomize`, { method: 'POST' }); await load(); toast('New random device generated'); }
   if (act === 'refresh') { await api(`/api/profiles/${id}/refresh`, { method: 'POST' }); await load(); toast('New fingerprint generated'); }
@@ -1187,5 +1271,7 @@ function bind() {
   await load();
   const page = (location.hash || '#profiles').slice(1);
   go(['profiles', 'proxies', 'settings', 'api'].includes(page) ? page : 'profiles');
+  await pollStates();
+  firstRunCheck();
   setInterval(pollStates, 2000);
 })();
