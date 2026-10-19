@@ -68,7 +68,7 @@ def _state(pid: str) -> str:
 
 def _last_error(pid: str) -> str:
     try:
-        lines = (LOGS / f"{pid}.log").read_text(errors="replace").strip().splitlines()
+        lines = (LOGS / f"{pid}.log").read_text(encoding="utf-8", errors="replace").strip().splitlines()
     except OSError:
         return "Browser exited unexpectedly"
     msg = next((l for l in reversed(lines) if l.strip() and not l.startswith(" ")), "")
@@ -655,7 +655,7 @@ def _job_state(name: str) -> str:
 
 def _job_raw(name: str) -> str:
     try:
-        return re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", Path(jobs[name]["log"]).read_text(errors="replace"))
+        return re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", Path(jobs[name]["log"]).read_text(encoding="utf-8", errors="replace"))
     except OSError:
         return ""
 
@@ -689,7 +689,8 @@ def _job(name: str, args: List[str]) -> Dict[str, Any]:
     if name in jobs and _job_state(name) == "running":
         raise HTTPException(409, "Already running")
     logf = LOGS / f"job-{re.sub(r'[^a-z0-9.-]', '_', name.lower())}.log"
-    env = dict(os.environ, FORCE_COLOR="1", COLUMNS="100")  # rich draws its progress bar into the log
+    env = dict(os.environ, FORCE_COLOR="1", COLUMNS="100",  # rich draws its progress bar into the log
+               PYTHONIOENCODING="utf-8")
     proc = subprocess.Popen(core.self_cmd("camoufox", *args), stdout=open(logf, "wb"), env=env,
                             stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **core.popen_kwargs())
     jobs[name] = {"state": "running", "log": str(logf), "proc": proc, "started": time.time()}
