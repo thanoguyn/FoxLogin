@@ -45,7 +45,7 @@ FoxLogin runs on your own machine as a small web app. You can create any number 
 ## Requirements
 
 - macOS, Windows or Linux with **Python 3.10+** (developed on Python 3.13 / macOS).
-- About 1.2 GB of disk space for each Camoufox browser build. It downloads automatically the first time a profile runs.
+- About 1.2 GB of disk space for each Camoufox browser build. On first start FoxLogin offers the list of builds (newest stable preselected); skip it and the newest stable build downloads the first time a profile runs, with its progress shown on the Run button and in a banner.
 
 ## Installation & running
 

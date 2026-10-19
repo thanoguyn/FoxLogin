@@ -93,6 +93,19 @@ tr:hover .settings-link { visibility: visible; }
 .btn-run:hover { background: var(--green-soft); }
 .btn-run.stop { border-color: #c9c9c9; color: #555; }
 .btn-run.busy { opacity: .6; pointer-events: none; }
+.btn-run.dl { border-color: #d9b46a; color: #9a6400; background: #fff8ea; }
+.state.downloading i { flex: none; border-color: #d9b46a; background: #f3d79b; animation: blink 1s ease-in-out infinite alternate; }
+@keyframes blink { to { opacity: .3; } }
+.dl-banner { display: flex; align-items: center; gap: 12px; padding: 9px 20px; background: #fff8ea; border-bottom: 1px solid #f0dfb8; color: #6b4a00; font-size: 13px; }
+.dl-banner .bar { flex: 0 0 180px; height: 6px; border-radius: 3px; background: #f0dfb8; overflow: hidden; }
+.dl-banner .bar span { display: block; height: 100%; background: #d9a441; transition: width .4s; }
+.dl-banner .bar.indef span { width: 30% !important; animation: indef 1.2s ease-in-out infinite; }
+@keyframes indef { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+.ver-pick { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.modal-card .ver-pick label { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); margin: 0; cursor: pointer; }
+.modal-card .ver-pick label:last-child { border-bottom: 0; }
+.modal-card .ver-pick label .sub { margin: 0 0 0 auto; }
+.modal-card .ver-pick input, .modal-card #pickPre { width: auto; flex: none; margin: 0; }
 .dots { border: 0; background: none; color: #777; letter-spacing: 1px; visibility: hidden; padding: 4px 6px; border-radius: 6px; }
 tr:hover .dots { visibility: visible; }
 .dots:hover { background: #ececec; }

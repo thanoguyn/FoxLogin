@@ -33,6 +33,7 @@ procs: Dict[str, subprocess.Popen] = {}
 ports: Dict[str, int] = {}   # automation (WebDriver BiDi) port per running profile
 errors: Dict[str, str] = {}  # last launch failure per profile, shown once by the UI
 jobs: Dict[str, Dict[str, Any]] = {}  # browser install / sync jobs
+pending: Dict[str, str] = {}  # profile -> browser download job it starts after (first Run)
 
 
 # ------------------------------------------------------------------------ state
@@ -53,6 +54,8 @@ def _adopted_pid(pid: str) -> Optional[int]:
 
 
 def _state(pid: str) -> str:
+    if pid in pending:
+        return _pending_state(pid)
     pr = procs.get(pid)
     if pr is None:
         return "running" if _adopted_pid(pid) else "ready"
@@ -111,13 +114,8 @@ def _run_info(pid: str) -> Dict[str, Any]:
     return info
 
 
-async def start_profile(pid: str, automation: bool = False, headless: bool = False,
-                        wait: bool = False) -> Dict[str, Any]:
-    _profile_or_404(pid)
-    if _state(pid) == "running":
-        if automation and not ports.get(pid):
-            raise HTTPException(409, "Profile is running without automation; stop it first")
-        return _run_info(pid)
+def _spawn(pid: str, automation: bool = False, headless: bool = False) -> int:
+    """Start the profile's runner; returns its automation port (0 without)."""
     cmd = [sys.executable, "-W", "ignore", "-m", "app.runner", pid]
     port = _free_port() if automation else 0
     if port:
@@ -127,6 +125,50 @@ async def start_profile(pid: str, automation: bool = False, headless: bool = Fal
         cmd.append("--headless")
     log = open(LOGS / f"{pid}.log", "wb")
     procs[pid] = subprocess.Popen(cmd, cwd=str(core.ROOT), stdout=log, stderr=subprocess.STDOUT)
+    return port
+
+
+def _pending_state(pid: str) -> str:
+    """A profile waiting for the browser download: starts once it is in."""
+    name = pending[pid]
+    st = _job_state(name)
+    if st == "running":
+        return "downloading"
+    pending.pop(pid)
+    if not core.browser_installed():
+        errors[pid] = "Could not download the Camoufox browser: " + (_job_log(name).strip().splitlines() or ["unknown error"])[-1][-200:]
+        return "ready"
+    _spawn(pid)
+    return "running"
+
+
+def _download_job() -> str:
+    """The job bringing in a first browser: one already running, else the newest stable build."""
+    if dl := _download_info():
+        return dl["job"]
+    stable = [v for v in core.browser_versions()["available"] if v["repo"] == "official" and not v["prerelease"]]
+    if not stable:  # no repo list yet: the build this camoufox library pairs with
+        return _job("setup", ["fetch"])["job"]
+    v = max(stable, key=lambda v: core.version_key(v["version"]))
+    spec = f"official/{v['version']}"
+    return _job(f"install {spec}", ["fetch", spec])["job"]
+
+
+async def start_profile(pid: str, automation: bool = False, headless: bool = False,
+                        wait: bool = False) -> Dict[str, Any]:
+    _profile_or_404(pid)
+    state = _state(pid)
+    if state == "running":
+        if automation and not ports.get(pid):
+            raise HTTPException(409, "Profile is running without automation; stop it first")
+        return _run_info(pid)
+    if state == "downloading" or not core.browser_installed():
+        job = _download_job()
+        if wait or automation:
+            raise HTTPException(503, "The Camoufox browser is still downloading (first run); try again when it finishes")
+        pending[pid] = job
+        return _run_info(pid)
+    port = _spawn(pid, automation, headless)
     if wait or port:
         deadline = time.time() + 90
         while time.time() < deadline:
@@ -144,6 +186,7 @@ async def start_profile(pid: str, automation: bool = False, headless: bool = Fal
 
 
 def stop_profile(pid: str) -> Dict[str, Any]:
+    pending.pop(pid, None)  # waiting for the download: just don't start (the download goes on)
     pr = procs.get(pid)
     if pr is None and (opid := _adopted_pid(pid)):
         import signal
@@ -438,15 +481,17 @@ async def run_link(pid: str):
     from fastapi.responses import HTMLResponse
 
     p = _profile_or_404(pid)
-    await start_profile(pid)
-    return HTMLResponse(f"<p style='font:15px system-ui;padding:24px'>Started <b>{p['name']}</b>. You can close this tab.</p>")
+    what = "Downloading the Camoufox browser first; it opens when that finishes" \
+        if (await start_profile(pid))["state"] == "downloading" else "Started"
+    return HTMLResponse(f"<p style='font:15px system-ui;padding:24px'>{what}: <b>{p['name']}</b>. You can close this tab.</p>")
 
 
 @app.get("/api/states")
 def states():
-    ids = set(procs) | {d.name for d in core.PROFILES.iterdir() if (d / "runtime.json").exists()}
+    ids = set(procs) | set(pending) | {d.name for d in core.PROFILES.iterdir() if (d / "runtime.json").exists()}
     out = {pid: _state(pid) for pid in ids}
-    return {"states": out, "ports": dict(ports), "errors": {pid: errors.pop(pid) for pid in list(errors)}}
+    return {"states": out, "ports": dict(ports), "errors": {pid: errors.pop(pid) for pid in list(errors)},
+            "download": _download_info()}
 
 
 # -------------------------------------------------------------- automation API
@@ -590,25 +635,57 @@ def check_proxy(proxy: Dict[str, Any] = Body(...)):
 @app.get("/api/browsers")
 def browsers():
     data = core.browser_versions()
-    data["jobs"] = {k: {kk: vv for kk, vv in v.items() if kk != "proc"} for k, v in jobs.items()}
-    for j in jobs.values():
-        pr = j.get("proc")
-        if pr is not None and pr.poll() is not None and j["state"] == "running":
-            j["state"] = "done" if pr.returncode == 0 else "failed"
-    for k, v in data["jobs"].items():
-        v["state"] = jobs[k]["state"]
-        try:
-            v["log"] = Path(jobs[k]["log"]).read_text(errors="replace")[-600:]
-        except OSError:
-            v["log"] = ""
+    data["jobs"] = {k: {"state": _job_state(k), "log": _job_log(k)[-600:], "progress": _job_progress(k),
+                        "started": v["started"]} for k, v in jobs.items()}
     return data
 
 
+def _job_state(name: str) -> str:
+    j = jobs[name]
+    pr = j.get("proc")
+    if pr is not None and pr.poll() is not None and j["state"] == "running":
+        j["state"] = "done" if pr.returncode == 0 else "failed"
+    return j["state"]
+
+
+def _job_raw(name: str) -> str:
+    try:
+        return re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", Path(jobs[name]["log"]).read_text(errors="replace"))
+    except OSError:
+        return ""
+
+
+def _job_log(name: str) -> str:
+    """The job's output as plain text: the progress bar redraws collapse to their last state."""
+    lines = (([seg for seg in l.split("\r") if seg.strip()] or [""])[-1] for l in _job_raw(name).splitlines())
+    return "\n".join(l for l in lines if l.strip())
+
+
+def _job_progress(name: str) -> Optional[Dict[str, Any]]:
+    """The download bar's last "12.3/456.7 MB" reading."""
+    m = re.findall(r"([\d.]+)/([\d.]+) ([kMG]?B)\b", _job_raw(name))  # extracting keeps the last (100%) reading
+    if not m:
+        return None
+    done, total, unit = m[-1]
+    pct = int(float(done) * 100 / float(total)) if float(total) else 0
+    return {"done": float(done), "total": float(total), "unit": unit, "pct": min(pct, 100)}
+
+
+def _download_info() -> Optional[Dict[str, Any]]:
+    """The browser download in progress, for the UI's progress display."""
+    for name in list(jobs):
+        if (name == "setup" or name.startswith("install ")) and _job_state(name) == "running":
+            return {"job": name, "version": name.split("/")[-1] if "/" in name else "",
+                    "progress": _job_progress(name), "started": jobs[name]["started"]}
+    return None
+
+
 def _job(name: str, args: List[str]) -> Dict[str, Any]:
-    if name in jobs and jobs[name]["state"] == "running":
+    if name in jobs and _job_state(name) == "running":
         raise HTTPException(409, "Already running")
     logf = LOGS / f"job-{re.sub(r'[^a-z0-9.-]', '_', name.lower())}.log"
-    proc = subprocess.Popen([sys.executable, "-W", "ignore", "-m", "camoufox", *args],
+    env = dict(os.environ, FORCE_COLOR="1", COLUMNS="100")  # rich draws its progress bar into the log
+    proc = subprocess.Popen([sys.executable, "-W", "ignore", "-m", "camoufox", *args], env=env,
                             stdout=open(logf, "wb"), stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
     jobs[name] = {"state": "running", "log": str(logf), "proc": proc, "started": time.time()}
     return {"job": name}
