@@ -70,7 +70,7 @@ def main(pid: str, debug_port: int = 0, headless: bool = False) -> None:
     os.environ["FOXCLI_DOCK_BADGE"] = label
     os.environ.pop("FOXCLI_DOCK_TEXT", None)
     kw, loc = core.launch_kwargs(p, headless=headless, debug_port=debug_port or None)
-    exe = core.dock_app(p)     # a copy of the browser whose Dock icon carries the badge
+    exe = core.dock_app(p)     # private copy of the browser: Google search, badge in its Dock icon
     if exe:
         kw.pop("browser", None)
         kw["executable_path"] = exe
