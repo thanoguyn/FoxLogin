@@ -28,7 +28,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.4; }
 /* sidebar ------------------------------------------------------------- */
 .sidebar { width: 240px; flex: none; padding: 14px 8px 12px; display: flex; flex-direction: column; gap: 10px; }
 .ws { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-weight: 600; }
-.ws-badge { width: 22px; height: 22px; border-radius: 6px; background: var(--green); color: #fff; display: grid; place-items: center; font-size: 12px; }
+.ws-badge { width: 22px; height: 22px; flex: none; }
 .add-split { position: relative; display: flex; }
 .btn-add { flex: 1; height: 40px; border: 0; border-radius: 8px 0 0 8px; background: var(--green); color: #fff; font-weight: 500; }
 .btn-add-dd { width: 32px; border: 0; border-left: 1px solid rgba(255,255,255,.35); border-radius: 0 8px 8px 0; background: var(--green); color: #fff; display: grid; place-items: center; }

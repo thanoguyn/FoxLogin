@@ -7,9 +7,8 @@
   html, body { height: 100%; margin: 0; background: #F4F5F7; color: #1f2329;
     font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   .wrap { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
-  .logo { width: 56px; height: 56px; border-radius: 14px; background: #3d9a6a; color: #fff;
-    display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: 700; }
-  .spin { width: 22px; height: 22px; border: 3px solid #d5d8de; border-top-color: #3d9a6a; border-radius: 50%;
+  .logo { width: 56px; height: 56px; }
+  .spin { width: 22px; height: 22px; border: 3px solid #d5d8de; border-top-color: #ee755c; border-radius: 50%;
     animation: r .8s linear infinite; }
   @keyframes r { to { transform: rotate(360deg); } }
   #msg { color: #6b7280; }
@@ -18,7 +17,7 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="logo">F</div>
+    <img class="logo" src="logo.svg" alt="">
     <div class="spin" id="spin"></div>
     <div id="msg">Starting FoxLogin…</div>
     <div id="err"></div>
