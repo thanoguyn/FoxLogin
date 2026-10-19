@@ -519,7 +519,7 @@ function dockLabel(p) {
   if (b.mode === 'off') return '';
   if (b.mode === 'custom') return (b.text || '').trim().slice(0, 4);
   const name = (p.name || '').trim(); const last = name.split(/\s+/).at(-1) || '';
-  return last && last.length <= 4 ? last.toUpperCase() : name.slice(0, 2).toUpperCase();
+  return last && last.length <= 4 ? last.toUpperCase() : name.slice(0, 3).toUpperCase();
 }
 const tog = (path, on) => `<label class="switch"><input type="checkbox" data-path="${path}" ${on ? 'checked' : ''}><span></span></label>`;
 
