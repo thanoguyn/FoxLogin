@@ -66,8 +66,16 @@ def main(pid: str, debug_port: int = 0, headless: bool = False) -> None:
     signal.signal(signal.SIGINT, _on_term)
 
     core.install_dock_hook()
-    os.environ["FOXCLI_DOCK_BADGE"] = core.dock_label(p)
+    label = core.dock_label(p)
+    os.environ["FOXCLI_DOCK_BADGE"] = label
+    os.environ.pop("FOXCLI_DOCK_TEXT", None)
     kw, loc = core.launch_kwargs(p, headless=headless, debug_port=debug_port or None)
+    exe = core.dock_app(p)     # a copy of the browser whose Dock icon carries the badge
+    if exe:
+        kw.pop("browser", None)
+        kw["executable_path"] = exe
+    elif label:
+        os.environ["FOXCLI_DOCK_TEXT"] = "1"   # fall back to the Dock badge text
     udir = core._pdir(pid) / "userdata"
     udir.mkdir(exist_ok=True)
     with Camoufox(persistent_context=True, user_data_dir=str(udir), **kw) as ctx:
