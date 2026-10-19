@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 warnings.filterwarnings("ignore")
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 # Packaged by PyInstaller: one executable re-invokes itself in other modes
 FROZEN = bool(getattr(sys, "frozen", False))

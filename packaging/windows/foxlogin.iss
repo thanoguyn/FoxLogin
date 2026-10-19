@@ -2,7 +2,7 @@
 ; Built by packaging/build.py:  iscc /DAppVersion=1.0.0 /DSourceDir=... /DOutputDir=... foxlogin.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 
 [Setup]

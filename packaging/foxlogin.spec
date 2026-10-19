@@ -9,7 +9,7 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 ROOT = Path(SPECPATH).parent
 ASSETS = ROOT / "packaging" / "assets"
-VERSION = os.environ.get("FOXLOGIN_VERSION", "1.0.0")
+VERSION = os.environ.get("FOXLOGIN_VERSION", "1.0.1")
 ARCH = os.environ.get("FOXLOGIN_ARCH") or None
 
 datas = [(str(ROOT / "app" / "static"), "app/static")]
