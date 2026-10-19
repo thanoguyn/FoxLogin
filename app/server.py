@@ -129,11 +129,11 @@ def _spawn(pid: str, automation: bool = False, headless: bool = False) -> int:
 
 def _pending_state(pid: str) -> str:
     """A profile waiting for the browser download: starts once it is in."""
-    name = pending[pid]
-    st = _job_state(name)
-    if st == "running":
+    name = pending.get(pid)
+    if name and _job_state(name) == "running":
         return "downloading"
-    pending.pop(pid)
+    if pending.pop(pid, None) is None:  # another request (thread) got here first
+        return _state(pid)
     if not core.browser_installed():
         errors[pid] = "Could not download the Camoufox browser: " + (_job_log(name).strip().splitlines() or ["unknown error"])[-1][-200:]
         return "ready"
