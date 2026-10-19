@@ -831,18 +831,23 @@ def dock_label(p: Dict[str, Any]) -> str:
     return name[:3].upper()
 
 
-DOCK_MARK = "// FOXCLI-DOCK-BADGE v6"
+DOCK_MARK = "// FOXCLI-DOCK-BADGE v7"
 DOCK_HOOK = DOCK_MARK + """
-// Added by FoxLogin: shows FOXCLI_DOCK_BADGE as a small label left of the address
-// bar so several profile windows can be told apart. No-op without the variable.
-// With FOXCLI_DOCK_TEXT set it also badges the Dock icon with the text (used only
-// when the profile's own icon could not be drawn).
+// Added by FoxLogin: marks the window with FOXCLI_DOCK_BADGE so several profile
+// windows can be told apart. No-op without the variable.
+//   all systems:  a small red label left of the address bar
+//   Windows:      the same text as a taskbar overlay icon
+//   Linux:        a "[text]" prefix in the window title
+//   macOS:        with FOXCLI_DOCK_TEXT set, the Dock badge text (the profile's own
+//                 icon normally carries the badge; this is the fallback)
 (() => {
   try {
     const text = getenv("FOXCLI_DOCK_BADGE");
     if (!text) return;
     const Cc = Components.classes, Ci = Components.interfaces;
     const HTML = "http://www.w3.org/1999/xhtml";
+    let os = "";
+    try { os = Cc["@mozilla.org/xre/app-info;1"].getService(Ci.nsIXULRuntime).OS; } catch (e) {}
     const addLabel = (win) => {
       try {
         const doc = win.document;
@@ -859,8 +864,29 @@ DOCK_HOOK = DOCK_MARK + """
         bar.parentNode.insertBefore(el, bar);
       } catch (e) {}
     };
+    const overlay = (win) => {
+      try {
+        const cv = win.document.createElementNS(HTML, "canvas");
+        cv.width = cv.height = 32;
+        const g = cv.getContext("2d");
+        g.fillStyle = "#e5322d";
+        g.beginPath(); g.arc(16, 16, 15, 0, Math.PI * 2); g.fill();
+        g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "middle";
+        g.font = "bold " + [0, 22, 18, 14, 12][Math.min(text.length, 4)] + "px sans-serif";
+        g.fillText(text, 16, 17);
+        const bin = win.atob(cv.toDataURL("image/png").split(",")[1]);
+        const bytes = new win.Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const img = Cc["@mozilla.org/image/tools;1"].getService(Ci.imgITools).decodeImageFromArrayBuffer(bytes.buffer, "image/png");
+        Cc["@mozilla.org/windows-taskbar;1"].getService(Ci.nsIWinTaskbar)
+          .getOverlayIconController(win.docShell).setOverlayIcon(img, "Profile " + text);
+      } catch (e) {}
+    };
+    const titlePrefix = (win) => {
+      try { win.document.documentElement.setAttribute("titlepreface", "[" + text + "] "); } catch (e) {}
+    };
     let dock = null;
-    if (getenv("FOXCLI_DOCK_TEXT")) {
+    if (os == "Darwin" && getenv("FOXCLI_DOCK_TEXT")) {
       try { dock = Cc["@mozilla.org/widget/macdocksupport;1"].getService(Ci.nsIMacDockSupport); } catch (e) {}
     }
     const setDock = (force) => {
@@ -871,7 +897,14 @@ DOCK_HOOK = DOCK_MARK + """
       } catch (e) {}
     };
     const obs = Cc["@mozilla.org/observer-service;1"].getService(Ci.nsIObserverService);
-    globalThis.__foxcliObs = { observe(win) { addLabel(win); setDock(true); } };
+    globalThis.__foxcliObs = {
+      observe(win) {
+        addLabel(win);
+        if (os == "WINNT") overlay(win);
+        if (os == "Linux") titlePrefix(win);
+        setDock(true);
+      },
+    };
     obs.addObserver(globalThis.__foxcliObs, "browser-delayed-startup-finished");
     if (dock) {
       const timer = Cc["@mozilla.org/timer;1"].createInstance(Ci.nsITimer);
@@ -885,40 +918,48 @@ DOCK_HOOK = DOCK_MARK + """
 
 
 def _badged_icns(src: Path, label: str, out: Path) -> None:
-    """Write `src` (an .icns) to `out` with `label` drawn in a red badge at the top right."""
+    """Write an .icns to `out` that shows `label` large on a round tile, with the icon in `src`
+    shrunk to a badge at the bottom right (it may cover the label's corner)."""
     import subprocess
     import tempfile
 
     from AppKit import (
-        NSBezierPath, NSBitmapImageRep, NSColor, NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
+        NSBezierPath, NSBitmapImageRep, NSColor, NSFont, NSGradient, NSFontAttributeName, NSForegroundColorAttributeName,
         NSGraphicsContext, NSImage, NSMakeRect, NSPNGFileType, NSString, NSZeroRect,
     )
 
     base = NSImage.alloc().initWithContentsOfFile_(str(src))
     if base is None:
         raise OSError(f"cannot read {src}")
-    red, white = NSColor.colorWithSRGBRed_green_blue_alpha_(0.898, 0.196, 0.176, 1), NSColor.whiteColor()
+    white = NSColor.whiteColor()
+
+    top, bottom = (0.973, 0.698, 0.396), (0.890, 0.118, 0.302)     # the orange-to-pink of the Camoufox icon
 
     def render(px: int) -> bytes:
         rep = NSBitmapImageRep.alloc().initWithBitmapDataPlanes_pixelsWide_pixelsHigh_bitsPerSample_samplesPerPixel_hasAlpha_isPlanar_colorSpaceName_bytesPerRow_bitsPerPixel_(
             None, px, px, 8, 4, True, False, "NSCalibratedRGBColorSpace", 0, 0)
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.setCurrentContext_(NSGraphicsContext.graphicsContextWithBitmapImageRep_(rep))
-        base.drawInRect_fromRect_operation_fraction_(NSMakeRect(0, 0, px, px), NSZeroRect, 2, 1.0)
-        h = px * 0.36
-        font = NSFont.boldSystemFontOfSize_(h * (0.66 if len(label) < 3 else 0.56))
-        attrs = {NSFontAttributeName: font, NSForegroundColorAttributeName: white}
+        # Round gradient tile carrying the label, as large as it fits
+        NSGradient.alloc().initWithStartingColor_endingColor_(
+            NSColor.colorWithSRGBRed_green_blue_alpha_(*top, 1), NSColor.colorWithSRGBRed_green_blue_alpha_(*bottom, 1),
+        ).drawInBezierPath_angle_(NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(0, 0, px, px)), -90)
         text = NSString.stringWithString_(label)
-        tw, th = text.sizeWithAttributes_(attrs)
-        w = max(h, tw + h * 0.5)
-        x, y = px * 0.99 - w, px * 0.99 - h
-        ring = h * 0.07
+        size = px * 0.64
+        while True:
+            attrs = {NSFontAttributeName: NSFont.boldSystemFontOfSize_(size), NSForegroundColorAttributeName: white}
+            tw, th = text.sizeWithAttributes_(attrs)
+            if tw <= px * 0.8 or size < 4:
+                break
+            size *= 0.94
+        text.drawAtPoint_withAttributes_(((px - tw) / 2, (px - th) / 2), attrs)
+        # The Camoufox icon shrunk to a badge at the bottom right
+        d = px * 0.36
+        x, y = px * 0.99 - d, px * 0.01
+        ring = d * 0.08
         white.setFill()
-        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(NSMakeRect(x - ring, y - ring, w + 2 * ring, h + 2 * ring),
-                                                                (h + 2 * ring) / 2, (h + 2 * ring) / 2).fill()
-        red.setFill()
-        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(NSMakeRect(x, y, w, h), h / 2, h / 2).fill()
-        text.drawAtPoint_withAttributes_((x + (w - tw) / 2, y + (h - th) / 2), attrs)
+        NSBezierPath.bezierPathWithOvalInRect_(NSMakeRect(x - ring, y - ring, d + 2 * ring, d + 2 * ring)).fill()
+        base.drawInRect_fromRect_operation_fraction_(NSMakeRect(x, y, d, d), NSZeroRect, 2, 1.0)
         NSGraphicsContext.restoreGraphicsState()
         return bytes(rep.representationUsingType_properties_(NSPNGFileType, {}))
 
@@ -989,7 +1030,7 @@ def dock_app(p: Dict[str, Any]) -> Optional[str]:
         dest = browser_copy_dir(p["id"]) / "Camoufox.app"
         stamp = dest.parent / "stamp"
         cfg_mtime = (src / "Contents/Resources/camoufox.cfg").stat().st_mtime   # changes with the badge hook
-        key = f"v3|{src}|{(src / 'Contents/Info.plist').stat().st_mtime}|{cfg_mtime}|{label}"
+        key = f"v5|{src}|{(src / 'Contents/Info.plist').stat().st_mtime}|{cfg_mtime}|{label}"
         if not (stamp.exists() and stamp.read_text() == key and (dest / "Contents/MacOS/camoufox").exists()):
             shutil.rmtree(dest.parent, ignore_errors=True)
             dest.parent.mkdir(parents=True)
@@ -1019,18 +1060,14 @@ def dock_app(p: Dict[str, Any]) -> Optional[str]:
 
 
 def install_dock_hook() -> None:
-    """Make sure every installed macOS Camoufox build carries DOCK_HOOK.
+    """Make sure every installed Camoufox build carries DOCK_HOOK.
 
     Re-run before each launch: a newly installed build starts without it, and
     an older version of the block is replaced."""
     import re
-    import sys
-
-    if sys.platform != "darwin":
-        return
     from camoufox.pkgman import INSTALL_DIR
 
-    for cfg in Path(INSTALL_DIR).glob("browsers/*/*/Camoufox.app/Contents/Resources/camoufox.cfg"):
+    for cfg in _build_files("camoufox.cfg"):
         try:
             text = cfg.read_text()
             # Leave an equal or newer block alone: another FoxLogin build may share this cache
@@ -1098,3 +1135,29 @@ def stop_runner(os_pid: int, profile_id: str, timeout: float = 15) -> None:
                 pass
     except psutil.Error:
         pass
+
+
+def _build_files(name: str) -> List[Path]:
+    """`name` (camoufox.cfg or distribution/policies.json) in every installed Camoufox build."""
+    import sys
+    from camoufox.pkgman import INSTALL_DIR
+
+    root = "Camoufox.app/Contents/Resources/" if sys.platform == "darwin" else ""
+    return sorted(Path(INSTALL_DIR).glob(f"browsers/*/*/{root}{name}"))
+
+
+def install_search_policy() -> None:
+    """Windows and Linux have no per-profile browser copy, so Google becomes the
+    default search engine in the installed builds themselves (macOS does it in the
+    copy, see dock_app)."""
+    import sys
+
+    if sys.platform == "darwin":
+        return
+    for policies in _build_files("distribution/policies.json"):
+        try:
+            eng = json.loads(policies.read_text()).get("policies", {}).get("SearchEngines", {})
+            if eng.get("Default") != "Google":
+                _google_default(policies)
+        except (OSError, ValueError):
+            pass

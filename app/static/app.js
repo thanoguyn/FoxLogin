@@ -628,11 +628,12 @@ function renderFields(p, mode, extra = {}) {
     row('uBlock Origin', tog('ublock', p.ublock), 'Built-in ad blocker'),
     row('Block images', tog('block_images', p.block_images)),
   ];
-  if (S.meta.hostOs === 'macos') {
+  {
     const db = p.dock_badge || { mode: 'auto', text: '' }; const lbl = dockLabel(p);
-    ext.push(row('Dock badge', seg('dock_badge.mode', tmpl ? [['auto', 'Auto'], ['off', 'Off']] : [['auto', 'Auto'], ['custom', 'Custom'], ['off', 'Off']], db.mode)
+    const where = { macos: ['Dock badge', 'on the Dock icon'], windows: ['Taskbar badge', 'on the taskbar icon'], linux: ['Window badge', 'in the window title'] }[S.meta.hostOs] || ['Badge', 'on the window'];
+    ext.push(row(where[0], seg('dock_badge.mode', tmpl ? [['auto', 'Auto'], ['off', 'Off']] : [['auto', 'Auto'], ['custom', 'Custom'], ['off', 'Off']], db.mode)
       + (db.mode === 'custom' && !tmpl ? `<div style="margin-top:4px"><input type="text" maxlength="4" data-path="dock_badge.text" value="${esc(db.text)}" placeholder="e.g. 3"></div>` : ''),
-      tmpl ? (db.mode === 'auto' ? 'Number from the profile name' : '') : lbl ? `Badge <b>${esc(lbl)}</b> on the Dock icon (next launch)` : 'No badge'));
+      tmpl ? (db.mode === 'auto' ? 'Number from the profile name' : '') : lbl ? `Badge <b>${esc(lbl)}</b> ${where[1]} and left of the address bar (next launch)` : 'No badge'));
   }
   if (!tmpl) {
     const inst = (S.browsers && S.browsers.installed) || [];
