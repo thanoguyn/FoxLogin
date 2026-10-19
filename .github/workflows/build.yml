@@ -162,7 +162,11 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Name the Tauri installers apart from the pywebview ones
-        run: cd dist && for f in FoxLogin_*; do mv "$f" "FoxLogin-Tauri_${f#FoxLogin_}"; done
+        # Tauri artifacts keep their bundle/<format>/ folders; publish the files flat
+        run: |
+          find dist -mindepth 2 -type f -exec mv -t dist {} +
+          find dist -mindepth 1 -type d -empty -delete
+          cd dist && for f in FoxLogin_*; do mv "$f" "FoxLogin-Tauri_${f#FoxLogin_}"; done
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*

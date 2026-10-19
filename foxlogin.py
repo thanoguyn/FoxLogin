@@ -23,6 +23,8 @@ def _std_streams() -> None:
                 setattr(sys, name, open(fd, "w", buffering=1, closefd=False, encoding="utf-8", errors="replace"))
             except OSError:
                 setattr(sys, name, open(os.devnull, "w"))
+        elif hasattr(getattr(sys, name), "reconfigure"):
+            getattr(sys, name).reconfigure(encoding="utf-8", errors="replace")
 
 
 def main(argv) -> None:
