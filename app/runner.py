@@ -66,6 +66,7 @@ def main(pid: str, debug_port: int = 0, headless: bool = False) -> None:
     signal.signal(signal.SIGINT, _on_term)
 
     core.install_dock_hook()
+    core.install_search_policy()
     label = core.dock_label(p)
     os.environ["FOXCLI_DOCK_BADGE"] = label
     os.environ.pop("FOXCLI_DOCK_TEXT", None)
