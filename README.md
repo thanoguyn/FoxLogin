@@ -216,7 +216,25 @@ Native:
 
 ## Desktop app packaging
 
-The plan for shipping FoxLogin as an installable desktop app for macOS, Windows and Linux is in [docs/PACKAGING.md](docs/PACKAGING.md).
+FoxLogin also ships as a desktop app: a native window, no Python needed.
+
+| Platform | Installer |
+|---|---|
+| macOS Apple Silicon | `FoxLogin-<ver>-macos-arm64.dmg` |
+| macOS Intel | `FoxLogin-<ver>-macos-x86_64.dmg` |
+| Windows x64, also Windows 11 ARM via emulation | `FoxLogin-<ver>-windows-x64-setup.exe` |
+| Linux x86_64 / arm64 | `FoxLogin-<ver>-linux-<arch>.AppImage` (+ `.tar.gz`) |
+
+- **Minimum systems.** macOS 11 (Big Sur) or later on both Apple Silicon and Intel; Windows 10/11 x64; Linux with glibc 2.28 or later (Ubuntu 20.04+, Debian 11+, RHEL 8+).
+- **Builds.** GitHub Actions (`.github/workflows/build.yml`) builds every installer on each push. Pushing a tag like `v1.0.0` publishes them as a GitHub Release.
+- **Local build.** Run `python3 packaging/build.py [--arch arm64|x86_64]`. On an Apple Silicon Mac with Rosetta, both macOS builds can be made locally.
+- **First launch.** The app downloads the Camoufox core, about 1.2 GB (one-time).
+- **Data.** Profiles are stored in the user's app-data folder:
+  - macOS: `~/Library/Application Support/FoxLogin`
+  - Windows: `%APPDATA%\FoxLogin`
+  - Linux: `~/.local/share/FoxLogin`
+- **Closing the window** leaves running profiles open.
+- **Unsigned builds.** On macOS, right-click › Open the first time. On Windows, SmartScreen asks for "More info › Run anyway". See [docs/PACKAGING.md](docs/PACKAGING.md) for signing.
 
 ## Project layout
 

@@ -2,6 +2,37 @@
 
 Mục tiêu: người dùng tải một file cài đặt, cài xong mở như app bình thường. App hiện trong cửa sổ riêng (không phải tab trình duyệt) và không cần cài Python, pip hay chạy lệnh.
 
+## 0. Trạng thái (nhánh `packaging`)
+
+Đã làm:
+- `foxlogin.py` là một file thực thi chạy được nhiều chế độ: cửa sổ app, `--server`, `--runner`, `--camoufox`.
+- Cửa sổ app viết trong `app/desktop.py`, dùng pywebview. Mỗi lúc chỉ chạy một phiên: mở app lần hai thì cửa sổ cũ được đưa lên trước. Nếu port 8765 đã bị chương trình khác chiếm, app tự chọn port khác. Nếu không mở được cửa sổ native, app mở giao diện trong trình duyệt mặc định.
+- Dữ liệu nằm trong thư mục app-data của người dùng. Bản chạy từ mã nguồn vẫn dùng `./data`.
+- Quản lý tiến trình chạy được trên cả ba hệ điều hành:
+  - Kiểm tra tiến trình bằng `psutil`.
+  - Dừng profile bằng file `stop.flag`, rồi mới tắt cưỡng bức nếu cần.
+  - Tiến trình con có session riêng, không mở cửa sổ console.
+- Lần đầu mở app có màn hình cài core Camoufox.
+- `packaging/foxlogin.spec` cho PyInstaller và `packaging/build.py` để build venv riêng theo từng kiến trúc rồi tạo bộ cài: dmg, Inno Setup, AppImage.
+- Icon tạm nằm ở `packaging/make_icons.py`.
+- GitHub Actions build đủ 5 bản: macOS arm64/Intel, Windows x64, Linux x86_64/arm64. Mỗi bản có smoke test; push tag `v*` thì tự tạo Release.
+
+Đã kiểm tra trên máy dev (macOS Apple Silicon):
+- Bản arm64 build xong:
+  - Cửa sổ app hiển thị đúng.
+  - Mở app lần hai thì cửa sổ cũ được đưa lên trước.
+  - Chạy và dừng profile được.
+  - Runner không hiện icon trên Dock.
+- Bản Intel build qua Rosetta.
+- GitHub Actions build xanh cả 5 bản. Windows và Linux mới qua smoke test trên CI (server khởi động, tạo profile), chưa chạy thử trên máy thật.
+
+Hệ điều hành tối thiểu:
+- **macOS 11:** pip bị ép chọn các package build cho macOS 11. `indexed_zstd` được tự build kèm zstd nhúng tĩnh. Driver Playwright dùng Node 22 vì Node 24 đòi macOS 13.5.
+- **Windows 10/11 x64:** Windows 11 ARM chạy bản x64 qua giả lập.
+- **Linux glibc 2.28:** dùng Qt WebEngine 6.7.
+
+Chưa làm: ký số và notarize (cần chứng thư), overlay số profile trên taskbar Windows, icon trên khay hệ thống, auto-update.
+
 ## 1. Chọn công nghệ
 
 | Phương án | Cách làm | Ưu | Nhược |

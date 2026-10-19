@@ -1,0 +1,14 @@
+# Extra packages for the desktop build (on top of ../requirements.txt)
+pyinstaller>=6.10
+pywebview>=5.3
+psutil>=5.9
+platformdirs>=4
+pillow>=10
+# Linux window backend: Qt WebEngine. 6.7.x is the last release with
+# manylinux_2_28 wheels for both x86_64 and aarch64 (newer aarch64 needs glibc 2.39),
+# so the Linux app runs on Ubuntu 20.04+ / Debian 11+ / RHEL 8+.
+qtpy; sys_platform == "linux"
+PyQt6==6.7.1; sys_platform == "linux"
+PyQt6-Qt6==6.7.3; sys_platform == "linux"
+PyQt6-WebEngine==6.7.0; sys_platform == "linux"
+PyQt6-WebEngine-Qt6==6.7.3; sys_platform == "linux"
