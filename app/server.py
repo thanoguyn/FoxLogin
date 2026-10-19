@@ -8,6 +8,7 @@ Two API surfaces share the same handlers:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import socket
@@ -21,7 +22,7 @@ from fastapi import Body, FastAPI, HTTPException, Request, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import core, updater
+from app import core, humanize, updater
 
 STATIC = Path(__file__).parent / "static"
 LOGS = core.DATA / "logs"
@@ -30,10 +31,11 @@ PORT = int(os.environ.get("FOXCLI_PORT", 8765))
 
 app = FastAPI(title="FoxLogin")
 procs: Dict[str, subprocess.Popen] = {}
-ports: Dict[str, int] = {}   # automation (WebDriver BiDi) port per running profile
-errors: Dict[str, str] = {}  # last launch failure per profile, shown once by the UI
+ports: Dict[str, int] = {}          # automation (WebDriver BiDi) port per running profile
+controls: Dict[str, tuple] = {}     # runner human-input (control port, token) per running profile
+errors: Dict[str, str] = {}         # last launch failure per profile, shown once by the UI
 jobs: Dict[str, Dict[str, Any]] = {}  # browser install / sync jobs
-pending: Dict[str, str] = {}  # profile -> browser download job it starts after (first Run)
+pending: Dict[str, str] = {}        # profile -> browser download job it starts after (first Run)
 
 
 # ------------------------------------------------------------------------ state
@@ -48,7 +50,20 @@ def _adopted_pid(pid: str) -> Optional[int]:
         return None
     if rt.get("port"):
         ports[pid] = rt["port"]
+    _read_control(pid, rt)
     return rt["pid"]
+
+
+def _read_control(pid: str, rt: Optional[Dict[str, Any]] = None) -> Optional[tuple]:
+    """The runner's (control port, token) for /human/*, from runtime.json."""
+    if pid in controls:
+        return controls[pid]
+    if rt is None:
+        rt = core._read_json(core._pdir(pid) / "runtime.json") or {}
+    if rt.get("control_port") and rt.get("control_token"):
+        controls[pid] = (int(rt["control_port"]), str(rt["control_token"]))
+        return controls[pid]
+    return None
 
 
 def _state(pid: str) -> str:
@@ -61,6 +76,7 @@ def _state(pid: str) -> str:
         return "running"
     procs.pop(pid, None)
     ports.pop(pid, None)
+    controls.pop(pid, None)
     if pr.returncode not in (0, -15):
         errors[pid] = _last_error(pid)
     return "ready"
@@ -114,6 +130,8 @@ def _run_info(pid: str) -> Dict[str, Any]:
 
 def _spawn(pid: str, automation: bool = False, headless: bool = False) -> int:
     """Start the profile's runner; returns its automation port (0 without)."""
+    (core._pdir(pid) / "runtime.json").unlink(missing_ok=True)
+    controls.pop(pid, None)
     cmd = core.self_cmd("runner", pid)
     port = _free_port() if automation else 0
     if port:
@@ -173,9 +191,12 @@ async def start_profile(pid: str, automation: bool = False, headless: bool = Fal
         while time.time() < deadline:
             if _state(pid) != "running":
                 raise HTTPException(500, errors.pop(pid, "Browser exited during start"))
-            if port and _port_open(port):
+            rt_ready = (core._pdir(pid) / "runtime.json").exists()
+            if port and _port_open(port) and rt_ready:
+                _read_control(pid)
                 break
-            if not port and (core._pdir(pid) / "runtime.json").exists():
+            if not port and rt_ready:
+                _read_control(pid)
                 break
             await asyncio.sleep(0.4)
         else:
@@ -194,6 +215,7 @@ def stop_profile(pid: str) -> Dict[str, Any]:
         core.stop_runner(opid, pid)
     procs.pop(pid, None)
     ports.pop(pid, None)
+    controls.pop(pid, None)
     return {"status": "success", "profileId": pid, "state": "ready"}
 
 
@@ -563,13 +585,59 @@ def gologin_stop(data: Dict[str, Any] = Body(...)):
     return stop_profile(data.get("profileId") or data.get("profile_id"))
 
 
+HUMAN_ACTIONS = ("move", "click", "scroll", "type", "hover")
+
+
+@app.post("/api/profiles/{pid}/human/{action}")
+@app.post("/api/v1/profiles/{pid}/human/{action}")
+async def human_input(pid: str, action: str, data: Dict[str, Any] = Body(default={})):
+    """Run a Playwright-driven human input command on a running profile."""
+    import urllib.error
+    import urllib.request
+
+    _profile_or_404(pid)
+    if action not in HUMAN_ACTIONS:
+        raise HTTPException(400, f"Unknown action {action!r}; expected one of {', '.join(HUMAN_ACTIONS)}")
+    if _state(pid) != "running":
+        raise HTTPException(409, "Profile is not running")
+    control = _read_control(pid)
+    if not control:
+        raise HTTPException(503, "Profile control channel is not ready yet")
+    cport, ctoken = control
+
+    def _call():
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{cport}/human/{action}",
+            method="POST",
+            data=json.dumps(data).encode("utf-8"),
+            headers={"Content-Type": "application/json", core.CONTROL_TOKEN_HEADER: ctoken},
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=65) as resp:
+                return resp.status, json.loads(resp.read() or b"{}")
+        except urllib.error.HTTPError as e:
+            try:
+                err = json.loads(e.read() or b"{}")
+            except Exception:
+                err = {"detail": str(e)}
+            return e.code, err
+        except (urllib.error.URLError, OSError) as e:   # runner gone or not listening
+            return 503, {"detail": f"Profile control channel unreachable: {e}"}
+
+    status, payload = await asyncio.to_thread(_call)
+    if status >= 400:
+        raise HTTPException(status, payload.get("detail") or "Human input command failed")
+    return payload
+
+
 @app.websocket("/ws/{pid}")
 async def bidi_proxy(ws: WebSocket, pid: str):
     """Relay to the profile's WebDriver BiDi socket.
 
     Puppeteer only drives BiDi browsers whose session reports a browserName
     containing "firefox"; Camoufox reports its own name, so the relay rewrites
-    that one field and passes everything else through untouched.
+    that one field, humanizes input when human_cursor is enabled, and passes
+    everything else through untouched.
     """
     import websockets
 
@@ -578,18 +646,30 @@ async def bidi_proxy(ws: WebSocket, pid: str):
         await ws.close(code=4404)
         return
     await ws.accept()
+    relay = humanize.BiDiHumanizer(pid)
     async with websockets.connect(f"ws://127.0.0.1:{port}/session", max_size=None) as up:
         async def down_to_up():
             while True:
                 msg = await ws.receive()
                 if msg["type"] == "websocket.disconnect":
+                    try:
+                        await up.send('{"id":2147483646,"method":"session.end","params":{}}')
+                    except Exception:
+                        pass
                     await up.close()
                     return
-                await up.send(msg.get("text") if msg.get("text") is not None else msg.get("bytes"))
+                if msg.get("text") is not None:
+                    out = await relay.handle_client_text(msg["text"], up.send)
+                    await up.send(out)
+                else:
+                    await up.send(msg.get("bytes"))
 
         async def up_to_down():
             async for m in up:
                 if isinstance(m, str):
+                    m = relay.handle_upstream_text(m)
+                    if m is None:
+                        continue
                     if '"browserName"' in m:
                         m = re.sub(r'"browserName":"[^"]*"', '"browserName":"firefox"', m)
                     await ws.send_text(m)

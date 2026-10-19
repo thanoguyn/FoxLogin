@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 import gzip
 import json
+import math
 import os
 import random
 import re
@@ -83,6 +84,7 @@ DEFAULT_PROFILE: Dict[str, Any] = {
     "device": "",       # human label of the drawn hardware, e.g. MacBook Pro 14"
     # Number/letters badged on the Camoufox Dock icon (macOS) to tell windows apart
     "dock_badge": {"mode": "auto", "text": ""},
+    "human_cursor": {"mode": "off", "max_time": 1.5},
 }
 
 
@@ -125,7 +127,7 @@ def _merge_defaults(p: Dict[str, Any]) -> Dict[str, Any]:
 TEMPLATE_KEYS = (
     "os", "start_url", "timezone", "geolocation", "language", "webrtc", "resolution",
     "canvas", "webgl_image", "webgl_info", "audio", "media_devices",
-    "allow_extensions", "ublock", "block_images", "dock_badge",
+    "allow_extensions", "ublock", "block_images", "dock_badge", "human_cursor",
 )
 
 # Fields "Reset to defaults" copies from the template onto an existing profile.
@@ -516,13 +518,29 @@ def launch_kwargs(
 
         kw["fonts"] = list(_load_os_fonts()[OS_KEYS[p["os"]]])
 
-    # Extensions --------------------------------------------------------------
+    # Extensions & human cursor -----------------------------------------------
     prefs["xpinstall.enabled"] = bool(p.get("allow_extensions", True))
     if not p.get("ublock"):
         kw["exclude_addons"] = [DefaultAddons.UBO]
     if p.get("block_images"):
         kw["block_images"] = True
+    if (p.get("human_cursor") or {}).get("mode") == "on":
+        kw["humanize"] = human_max_time(p)
+        config["allowMainWorld"] = True   # /human/* selector lookups (see runner._selector_box_expr)
     return kw, loc
+
+
+# Header the server sends with the runner's control_token on /human/* commands.
+CONTROL_TOKEN_HEADER = "X-FoxLogin-Control-Token"
+
+
+def human_max_time(p: Dict[str, Any]) -> float:
+    """The profile's human cursor max move time in seconds, clamped to 0.1–10."""
+    try:
+        t = float((p.get("human_cursor") or {}).get("max_time") or 1.5)
+    except (TypeError, ValueError):
+        return 1.5
+    return min(max(t, 0.1), 10.0) if math.isfinite(t) else 1.5
 
 
 def _resize_media(drawn: Dict[str, Any], want: Dict[str, Any]) -> Dict[str, Any]:
@@ -563,6 +581,8 @@ def preview(p: Dict[str, Any]) -> Dict[str, Any]:
         "micros": cfg.get("mediaDevices:micros"),
         "speakers": cfg.get("mediaDevices:speakers"),
         "audioSeed": cfg.get("audio:seed"),
+        "humanize": bool(cfg.get("humanize", False)),
+        "humanizeMaxTime": cfg.get("humanize:maxTime"),
     }
 
 

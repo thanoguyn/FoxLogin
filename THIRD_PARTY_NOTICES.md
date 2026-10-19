@@ -15,7 +15,8 @@ FoxLogin's own source code is released under the [MIT License](LICENSE).
 | [Uvicorn](https://github.com/encode/uvicorn) | pip dependency (ASGI server) | BSD-3-Clause |
 | [Requests](https://github.com/psf/requests) | pip dependency | Apache-2.0 |
 | [PySocks](https://github.com/Anorov/PySocks) | pip dependency (SOCKS proxy checks) | BSD-3-Clause |
-| [websockets](https://github.com/python-websockets/websockets) | Used only by `tests/check_api.py` | BSD-3-Clause |
+| [websockets](https://github.com/python-websockets/websockets) | BiDi `/ws/<id>` relay and tests | BSD-3-Clause |
+| [Cursory](https://pypi.org/project/cursory/) | pip dependency (human mouse trajectory recordings for the BiDi relay) | [LGPL-3.0-or-later](https://www.gnu.org/licenses/lgpl-3.0.html) |
 
 "Firefox" is a trademark of the Mozilla Foundation. FoxLogin is not affiliated with or endorsed by Mozilla, Camoufox or GoLogin.
 
@@ -24,5 +25,6 @@ FoxLogin's own source code is released under the [MIT License](LICENSE).
 The MIT License covers FoxLogin's own code only. A packaged build that **bundles** any of the components above also has to meet their terms:
 
 - **Camoufox / Firefox (MPL-2.0).** Ship the license text and tell users where to get the source code of the browser build you included. Any changes you make to MPL-licensed files must stay under MPL-2.0. Downloading the browser at first launch, as FoxLogin does today, avoids redistributing it.
+- **Cursory (LGPL-3.0-or-later).** Use it unmodified as a separate library (`pip install cursory`), ship its LGPL-3.0 license text (`cursory-*.dist-info/licenses/LICENSE`, bundled automatically by the PyInstaller specs), and allow users to replace or relink the `cursory` package in one-dir builds.
 - **Playwright (Apache-2.0) and any other bundled libraries.** Include their license and NOTICE files.
 - **uBlock Origin (GPL-3.0).** If you bundle it, ship the GPL-3.0 license and offer its source code.

@@ -5,18 +5,18 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 ROOT = Path(SPECPATH).parent.parent
 
 datas = [(str(ROOT / "app" / "static"), "app/static")]
 binaries = []
-hiddenimports = ["app.server", "app.runner", "app.core", "app.updater"]
+hiddenimports = ["app.server", "app.runner", "app.core", "app.humanize", "app.updater"]
 hiddenimports += collect_submodules("uvicorn")
 
 # Packages that ship data files (fingerprint models, locales, the Playwright
-# Node driver, ...) and import submodules dynamically.
-for pkg in ("camoufox", "fpgen", "playwright", "language_tags", "ua_parser", "browserforge",
+# Node driver, Cursory trajectories + LGPL license, ...) and import submodules dynamically.
+for pkg in ("camoufox", "cursory", "fpgen", "playwright", "language_tags", "ua_parser", "browserforge",
             "maxminddb", "screeninfo", "orjson", "rich", "rich_click"):
     try:
         d, b, h = collect_all(pkg)
@@ -25,6 +25,10 @@ for pkg in ("camoufox", "fpgen", "playwright", "language_tags", "ua_parser", "br
     datas += d
     binaries += b
     hiddenimports += h
+try:
+    datas += copy_metadata("cursory")
+except Exception:
+    pass
 
 a = Analysis(
     [str(Path(SPECPATH) / "backend.py")],

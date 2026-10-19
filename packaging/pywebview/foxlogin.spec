@@ -5,7 +5,7 @@ import os
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_all, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metadata
 
 HERE = Path(SPECPATH)
 ROOT = HERE.parent.parent
@@ -15,12 +15,12 @@ ARCH = os.environ.get("FOXLOGIN_ARCH") or None
 
 datas = [(str(ROOT / "app" / "static"), "app/static")]
 binaries = []
-hiddenimports = ["app.server", "app.runner", "app.core", "app.updater", "desktop"]
+hiddenimports = ["app.server", "app.runner", "app.core", "app.humanize", "app.updater", "desktop"]
 hiddenimports += collect_submodules("uvicorn")
 
 # Packages that ship data files (fingerprint models, locales, the Playwright
-# Node driver, ...) and import submodules dynamically.
-for pkg in ("camoufox", "fpgen", "playwright", "language_tags", "ua_parser", "browserforge",
+# Node driver, Cursory trajectories + LGPL license, ...) and import submodules dynamically.
+for pkg in ("camoufox", "cursory", "fpgen", "playwright", "language_tags", "ua_parser", "browserforge",
             "maxminddb", "webview", "screeninfo", "orjson", "rich", "rich_click"):
     try:
         d, b, h = collect_all(pkg)
@@ -29,6 +29,10 @@ for pkg in ("camoufox", "fpgen", "playwright", "language_tags", "ua_parser", "br
     datas += d
     binaries += b
     hiddenimports += h
+try:
+    datas += copy_metadata("cursory")
+except Exception:
+    pass
 
 excludes = ["tkinter", "PySide6", "PyQt5", "matplotlib", "IPython", "pytest"]
 if sys.platform != "linux":

@@ -780,6 +780,12 @@ function renderFields(p, mode, extra = {}) {
     row('Block images', tog('block_images', p.block_images)),
   ];
   {
+    const hc = p.human_cursor || { mode: 'off', max_time: 1.5 };
+    ext.push(row('Human cursor', seg('human_cursor.mode', [['off', 'Off'], ['on', 'On']], hc.mode)
+      + (hc.mode === 'on' ? `<div class="inline mini" style="margin-top:6px"><label class="sub">Max move time (s)</label><input type="number" min="0.1" max="10" step="0.1" data-path="human_cursor.max_time" value="${hc.max_time ?? 1.5}"></div>` : ''),
+      hc.mode === 'on' ? 'Humanized mouse, scroll &amp; typing' : ''));
+  }
+  {
     const db = p.dock_badge || { mode: 'auto', text: '' }; const lbl = dockLabel(p);
     const where = { macos: ['Dock badge', 'on the Dock icon'], windows: ['Taskbar badge', 'on the taskbar icon'], linux: ['Window badge', 'in the window title'] }[S.meta.hostOs] || ['Badge', 'on the window'];
     ext.push(row(where[0], seg('dock_badge.mode', tmpl ? [['auto', 'Auto'], ['off', 'Off']] : [['auto', 'Auto'], ['custom', 'Custom'], ['off', 'Off']], db.mode)
@@ -1180,11 +1186,12 @@ function renderApi() {
   const eps = [
     ['GET', '/api/v1/profiles', 'List profiles (state, port, proxy, fingerprint settings). Query: folder, q'],
     ['GET', '/api/v1/profiles/{id}', 'One profile, including its automation port while running'],
-    ['POST', '/api/v1/profiles', 'Create: {"name", "os", "proxy": "http://u:p@host:port", "folder", …}'],
+    ['POST', '/api/v1/profiles', 'Create: {"name", "os", "proxy": "http://u:p@host:port", "human_cursor": {"mode": "on", "max_time": 1.5}, …}'],
     ['PATCH', '/api/v1/profiles/{id}', 'Update any field (proxy may be a string in Webshare format)'],
     ['DELETE', '/api/v1/profiles/{id}', 'Delete a profile and its data'],
     ['POST', '/api/v1/profiles/{id}/start', 'Start with automation. Query: headless=true. Returns {wsUrl, wsEndpoint, port}'],
     ['POST', '/api/v1/profiles/{id}/stop', 'Stop the profile (cookies are saved)'],
+    ['POST', '/api/v1/profiles/{id}/human/{move|click|scroll|type|hover}', 'Camoufox native humanized input ({x, y}, {selector}, {deltaY}, {text})'],
     ['GET', '/api/v1/running', 'Running profiles and their endpoints'],
     ['POST', '/api/v1/profiles/{id}/randomize', 'New realistic random device + fingerprint'],
     ['POST', '/api/v1/profiles/{id}/cookies', 'Queue cookies (JSON array) for the next start'],

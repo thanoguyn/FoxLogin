@@ -166,6 +166,7 @@ Two values are deliberately **not** randomized:
 | WebGL info | A GPU that fits the OS, screen and CPU | Real GPU |
 | Media devices | Number and names of cameras, mics and speakers per profile | Real devices |
 | Timezone / Language / Geo / WebRTC | From the IP (through the proxy, if any) or Custom. Geolocation permission defaults to **Prompt** | |
+| Human cursor | Curved, human-paced mouse trajectories, wheel-sized scroll notches, and natural click/typing pauses (capped at `max_time`, default `1.5` s) | Off by default (direct jumps) |
 
 ## Automation API
 
@@ -175,21 +176,51 @@ Camoufox is Firefox, so automation uses **WebDriver BiDi**:
 - Playwright `connect()` **cannot** attach to a running profile.
 - Profiles started with the **Run** button do not open an automation port. Use the API to start them instead.
 
+### Humanized input (`human_cursor`)
+
+When a profile has `"human_cursor": {"mode": "on", "max_time": 1.5}` (or **Human cursor › On** in the UI), FoxLogin provides human-like input in two ways:
+
+1. **Transparent WebDriver BiDi relay (`wsUrl` / `/ws/<id>`).**
+   - `input.performActions` mouse moves (`pointerType: "mouse"` or omitted) are expanded through [`cursory.generate_trajectory`](https://pypi.org/project/cursory/) (the same library of 2,357 recorded human movements that Camoufox's built-in `humanize` uses) and scaled/resampled to ~60 Hz inside `[0, max_time]` following `CursorTrajectory.js`.
+   - Element origins (`origin: {type: "element", element: {sharedId}}`, used by Selenium's `move_to_element`) are resolved to the element's on-screen centre before generating the path.
+   - Short random pauses (40–120 ms) are inserted before `pointerDown` and `pointerUp`, large `wheel` scrolls are split into ~100 px notches, and `key` sequences get 30–90 ms typing gaps.
+   - *Limits:* Only `wsUrl` (`ws://127.0.0.1:<port>/ws/<id>`) goes through the relay; `wsEndpoint` (the raw BiDi port) bypasses it and stays unhumanized. `pointerType: "touch"` and `"pen"` are passed through untouched.
+
+2. **Camoufox's native `humanize` via `/api/v1/profiles/{id}/human/{move|click|scroll|type|hover}`.**
+   - Passes `humanize=<max_time>` to Camoufox on launch and drives the browser's built-in Juggler/Cursory trajectory generator through the profile runner.
+   - Each endpoint accepts an optional `page` field (an integer index into `ctx.pages`, default `-1`, or a URL/title substring; BiDi `browsingContext` IDs are not visible to Playwright):
+     - `POST .../human/move` — `{"x": 400, "y": 300, "page"?: 0}`
+     - `POST .../human/click` — `{"selector": "button.submit"}` or `{"x": 400, "y": 300, "button"?: "left", "clickCount"?: 1}`
+     - `POST .../human/scroll` — `{"deltaY": 500, "deltaX"?: 0, "x"?: 400, "y"?: 300}` (native wheel notches)
+     - `POST .../human/type` — `{"selector"?: "input[name=q]", "text": "hello", "delay"?: 50}`
+     - `POST .../human/hover` — `{"selector": "a.menu"}` or `{"x": 200, "y": 150}`
+   - `selector` lookups run in the page's main world, which FoxLogin allows only for profiles with Human cursor on. With it off, use `x`/`y`.
+
 ### Puppeteer
 
 ```js
 const puppeteer = require('puppeteer');
 
-const { wsUrl } = await (await fetch(
-  'http://127.0.0.1:8765/api/v1/profiles/PROFILE_ID/start', { method: 'POST' })).json();
+const API = 'http://127.0.0.1:8765/api/v1/profiles/PROFILE_ID';
+const { wsUrl } = await (await fetch(`${API}/start`, { method: 'POST' })).json();
 const browser = await puppeteer.connect({ browserWSEndpoint: wsUrl, protocol: 'webDriverBiDi' });
 const page = (await browser.pages())[0] ?? await browser.newPage();
 await page.goto('https://example.com');
+
+// Option A: standard BiDi input over wsUrl (humanized automatically by the relay when human_cursor is on)
+await page.click('a');
+
+// Option B: Camoufox's native engine-level humanize through the runner's human input API
+await fetch(`${API}/human/click`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ selector: 'a', page: 'example.com' }),
+});
 ```
 
 ### Raw WebDriver BiDi (Python)
 
-See [`tests/check_api.py`](tests/check_api.py). It starts a profile, sends `session.new`, `browsingContext.navigate` and `script.evaluate` over the `wsUrl`, and then stops the profile.
+See [`tests/check_api.py`](tests/check_api.py) and [`tests/check_human_cursor.py`](tests/check_human_cursor.py). They start a profile, drive it over `wsUrl` and `/human/*`, and then stop and delete the profile.
 
 ### Endpoints
 
@@ -206,11 +237,12 @@ Native:
 |---|---|---|
 | GET | `/api/v1/profiles` | List profiles (state, port, proxy, fingerprint settings). Query: `folder`, `q` |
 | GET | `/api/v1/profiles/{id}` | One profile, including its automation `port` while running |
-| POST | `/api/v1/profiles` | Create: `{"name", "os", "proxy": "http://u:p@host:port", "folder", ...}` |
+| POST | `/api/v1/profiles` | Create: `{"name", "os", "proxy": "http://u:p@host:port", "human_cursor": {"mode": "on", "max_time": 1.5}, "folder", ...}` |
 | PATCH | `/api/v1/profiles/{id}` | Update any field. `proxy` may be a string in Webshare format |
 | DELETE | `/api/v1/profiles/{id}` | Delete a profile and its data |
 | POST | `/api/v1/profiles/{id}/start` | Start with automation. Query `headless=true`. Returns `{wsUrl, wsEndpoint, port}` |
 | POST | `/api/v1/profiles/{id}/stop` | Stop the profile (cookies are saved) |
+| POST | `/api/v1/profiles/{id}/human/{move\|click\|scroll\|type\|hover}` | Drive Camoufox's native humanized input (`{x, y}`, `{selector}`, `{deltaY}`, `{text}`, optional `page`) |
 | GET | `/api/v1/running` | Running profiles and their endpoints |
 | POST | `/api/v1/profiles/{id}/randomize` | New realistic random device and fingerprint |
 | POST | `/api/v1/profiles/{id}/cookies` | Queue cookies (JSON array) for the next start |
@@ -295,12 +327,14 @@ FoxLogin/
 ├── app/
 │   ├── server.py        # FastAPI app: UI, REST API, BiDi websocket proxy
 │   ├── core.py          # profile storage, fingerprint generation, Camoufox launch options
+│   ├── humanize.py      # humanized mouse/wheel/key actions for the BiDi relay
 │   ├── updater.py       # app updates from GitHub Releases
 │   ├── runner.py        # runs one profile's browser in its own process
 │   └── static/          # single-page UI (index.html, app.js, style.css) and fptest.html
 ├── tests/
 │   ├── check_marks.py   # 27 checks: each mask changes exactly what it should
 │   ├── check_api.py     # REST start/stop + WebDriver BiDi automation
+│   ├── check_human_cursor.py  # BiDi relay + native /human/* cursor checks (on vs off)
 │   └── check_sites.py   # opens pixelscan / iphey / browserscan / creepjs and screenshots them
 ├── docs/
 │   ├── screenshots/     # images used in this README
@@ -326,6 +360,7 @@ Start the server first, then run the checks:
 python3 run.py &
 python3 tests/check_marks.py                       # 27 checks: masks change what they should, and only that
 pip3 install websockets && python3 tests/check_api.py   # REST API + WebDriver BiDi automation
+python3 tests/check_human_cursor.py                # humanized cursor over BiDi relay and /human/* API
 python3 tests/check_sites.py <profile_id> out_dir  # pixelscan, iphey, browserscan, creepjs (screenshots)
 ```
 
