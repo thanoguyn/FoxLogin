@@ -1,5 +1,5 @@
 ; Inno Setup script for FoxLogin (Windows x64; also runs on Windows 11 ARM via emulation).
-; Built by packaging/build.py:  iscc /DAppVersion=1.0.0 /DSourceDir=... /DOutputDir=... foxlogin.iss
+; Built by packaging/pywebview/build.py:  iscc /DAppVersion=1.0.0 /DSourceDir=... /DOutputDir=... foxlogin.iss
 
 #ifndef AppVersion
   #define AppVersion "1.0.2"

@@ -1,4 +1,6 @@
-"""FoxLogin desktop app entry point (also what PyInstaller packages).
+"""FoxLogin desktop app with a pywebview window (also what PyInstaller packages).
+
+    python3 packaging/pywebview/foxlogin.py   run it from source (pip install -r packaging/pywebview/requirements-build.txt)
 
     foxlogin                         open the app window
     foxlogin --server                API + web UI only, no window (http://127.0.0.1:8765)
@@ -10,6 +12,9 @@ import sys
 import warnings
 
 warnings.filterwarnings("ignore")
+
+# From source the app package sits three levels up; desktop.py sits next to this file
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
 def _std_streams() -> None:
@@ -37,7 +42,7 @@ def main(argv) -> None:
         from camoufox.__main__ import cli
         cli(argv[1:], prog_name="camoufox")
     else:
-        from app import desktop
+        import desktop
         desktop.main(server_only="--server" in argv)
 
 

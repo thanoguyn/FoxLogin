@@ -1,8 +1,8 @@
 """Build the FoxLogin desktop app and its installer for the current OS.
 
-    python3 packaging/build.py                    # this machine's architecture
-    python3 packaging/build.py --arch x86_64      # macOS: Intel build (via Rosetta)
-    python3 packaging/build.py --arch arm64       # macOS: Apple Silicon build
+    python3 packaging/pywebview/build.py                 # this machine's architecture
+    python3 packaging/pywebview/build.py --arch x86_64   # macOS: Intel build (via Rosetta)
+    python3 packaging/pywebview/build.py --arch arm64    # macOS: Apple Silicon build
 
 Each architecture gets its own virtualenv in build/, so the packaged Python and
 every native wheel (numpy, orjson, pydantic-core, ...) match the target CPU.
@@ -27,8 +27,8 @@ import sys
 import tarfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-PKG = ROOT / "packaging"
+PKG = Path(__file__).resolve().parent
+ROOT = PKG.parent.parent
 BUILD = ROOT / "build"
 DIST = ROOT / "dist"
 

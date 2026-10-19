@@ -1,7 +1,7 @@
 name: Build desktop app
 
 # Builds FoxLogin installers twice, around the same Python backend:
-#   build: pywebview window (packaging/build.py) for every platform Camoufox ships:
+#   build: pywebview window (packaging/pywebview) for every platform Camoufox ships:
 #     macOS arm64 + Intel (.dmg), Windows x64 (.exe, also runs on Windows 11 ARM),
 #     Linux x86_64 + arm64 (.AppImage + .tar.gz).
 #   tauri: Tauri shell (packaging/tauri) for macOS arm64 + Intel, Windows x64, Linux x64.
@@ -67,7 +67,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           # Optional macOS signing/notarization: add these repository secrets
           FOXLOGIN_SIGN_ID: ${{ secrets.FOXLOGIN_SIGN_ID }}
-        run: python packaging/build.py --arch ${{ matrix.arch }}
+        run: python packaging/pywebview/build.py --arch ${{ matrix.arch }}
 
       - name: Smoke test (API server starts from the packaged app)
         shell: bash

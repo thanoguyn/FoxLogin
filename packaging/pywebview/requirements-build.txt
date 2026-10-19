@@ -1,4 +1,4 @@
-# Extra packages for the desktop build (on top of ../requirements.txt)
+# Extra packages for the desktop build (on top of ../../requirements.txt)
 pyinstaller>=6.10
 pywebview>=5.3
 psutil>=5.9

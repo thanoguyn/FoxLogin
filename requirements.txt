@@ -8,4 +8,3 @@ PySocks
 pyobjc-framework-Cocoa; sys_platform == "darwin"
 psutil>=5.9
 platformdirs>=4
-pywebview>=5.3

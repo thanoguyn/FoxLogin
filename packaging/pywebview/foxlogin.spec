@@ -1,4 +1,4 @@
-# PyInstaller spec for FoxLogin. Run through packaging/build.py, which sets
+# PyInstaller spec for FoxLogin. Run through packaging/pywebview/build.py, which sets
 # FOXLOGIN_ARCH (macOS: arm64 | x86_64) and the version.
 # -*- mode: python -*-
 import os
@@ -7,14 +7,15 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-ROOT = Path(SPECPATH).parent
-ASSETS = ROOT / "packaging" / "assets"
+HERE = Path(SPECPATH)
+ROOT = HERE.parent.parent
+ASSETS = HERE / "assets"
 VERSION = os.environ.get("FOXLOGIN_VERSION", "1.0.2")
 ARCH = os.environ.get("FOXLOGIN_ARCH") or None
 
 datas = [(str(ROOT / "app" / "static"), "app/static")]
 binaries = []
-hiddenimports = ["app.server", "app.runner", "app.desktop", "app.core"]
+hiddenimports = ["app.server", "app.runner", "app.core", "desktop"]
 hiddenimports += collect_submodules("uvicorn")
 
 # Packages that ship data files (fingerprint models, locales, the Playwright
@@ -36,8 +37,8 @@ if sys.platform != "win32":
     excludes += ["webview.platforms.winforms", "webview.platforms.edgechromium", "clr", "pythonnet"]
 
 a = Analysis(
-    [str(ROOT / "foxlogin.py")],
-    pathex=[str(ROOT)],
+    [str(HERE / "foxlogin.py")],
+    pathex=[str(ROOT), str(HERE)],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

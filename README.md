@@ -4,7 +4,7 @@
 
 FoxLogin runs on your own machine as a small web app. You can create any number of browser profiles. Each profile has its own consistent fingerprint, its own proxy, and its own cookies and Firefox storage. You can run profiles by hand or automate them through a GoLogin-compatible REST API that uses WebDriver BiDi.
 
-> 🇻🇳 Vietnamese version: [README.vi.md](README.vi.md)
+You can also package it as a desktop app (macOS, Windows, Linux) that installs like any other program and needs no Python. See [Desktop app packaging](#desktop-app-packaging).
 
 ![Profiles](docs/screenshots/ui-profiles.png)
 
@@ -216,27 +216,66 @@ Native:
 
 ## Desktop app packaging
 
-FoxLogin also ships as a desktop app: a native window, no Python needed.
+FoxLogin can be packaged as a desktop app: an installer, a native window, no Python needed. There are two ways to build it. Both bundle the same Python backend (`app/`) with PyInstaller and differ only in the window around it:
 
-| Platform | Installer |
-|---|---|
-| macOS Apple Silicon | `FoxLogin-<ver>-macos-arm64.dmg` |
-| macOS Intel | `FoxLogin-<ver>-macos-x86_64.dmg` |
-| Windows x64, also Windows 11 ARM via emulation | `FoxLogin-<ver>-windows-x64-setup.exe` |
-| Linux x86_64 / arm64 | `FoxLogin-<ver>-linux-<arch>.AppImage` (+ `.tar.gz`) |
+| | pywebview (`packaging/pywebview/`) | Tauri (`packaging/tauri/`) |
+|---|---|---|
+| Window | pywebview in the same process as the server | Tauri 2 shell (Rust) that starts the backend as a separate process |
+| Closing the window | Stops the server | Hides the window; the app stays in the tray/Dock until Quit |
+| Toolchain | Python only | Python, Rust, Node.js |
+| macOS | `FoxLogin-<ver>-macos-<arm64\|x86_64>.dmg` | `FoxLogin_<ver>_<aarch64\|x64>.dmg` |
+| Windows x64 | `FoxLogin-<ver>-windows-x64-setup.exe` (Inno Setup) | `FoxLogin_<ver>_x64-setup.exe` (NSIS) and `.msi` |
+| Linux | `FoxLogin-<ver>-linux-<x86_64\|arm64>.AppImage` and `.tar.gz` | `FoxLogin_<ver>_amd64.AppImage` and `.deb` (x86_64 only) |
 
-- **Minimum systems.** macOS 11 (Big Sur) or later on both Apple Silicon and Intel; Windows 10/11 x64; Linux with glibc 2.28 or later (Ubuntu 20.04+, Debian 11+, RHEL 8+).
-- **Builds.** GitHub Actions (`.github/workflows/build.yml`) builds every installer on each push. Pushing a tag like `v1.0.0` publishes them as a GitHub Release.
-- **Local build.** Run `python3 packaging/build.py [--arch arm64|x86_64]`. On an Apple Silicon Mac with Rosetta, both macOS builds can be made locally.
-- **First launch.** The app downloads the Camoufox core, about 1.2 GB (one-time).
-- **Data.** Profiles are stored in the user's app-data folder:
+What both apps have in common:
+- **Minimum systems.** macOS 11 or later (Apple Silicon and Intel), Windows 10/11 x64 (Windows 11 ARM runs it through emulation), Linux with glibc 2.28 or later (Ubuntu 20.04+, Debian 11+, RHEL 8+).
+- **One instance.** Opening the app a second time brings the first window to the front.
+- **First launch.** The app offers to download a Camoufox build, about 1.2 GB, once.
+- **Data** lives in the user's app-data folder instead of `./data` (`FOXCLI_DATA` still overrides it):
   - macOS: `~/Library/Application Support/FoxLogin`
   - Windows: `%APPDATA%\FoxLogin`
   - Linux: `~/.local/share/FoxLogin`
-- **Closing the window** leaves running profiles open.
-- **Unsigned builds.** On macOS, right-click › Open the first time. On Windows, SmartScreen asks for "More info › Run anyway". See [docs/PACKAGING.md](docs/PACKAGING.md) for signing.
+- **Running profiles keep running** after the app quits. The next launch adopts them.
+- **Unsigned builds.** On macOS, right-click › Open the first time. On Windows, SmartScreen asks for "More info › Run anyway".
 
-The same app is also built with a [Tauri](https://tauri.app) shell around the same Python backend. See [docs/PACKAGING-TAURI.md](docs/PACKAGING-TAURI.md) for its design, build steps and test results.
+PyInstaller cannot cross-compile, so each OS builds its own installers. Output goes to the folders shown below.
+
+### Build with pywebview
+
+Requirements: Python 3.10+ (on macOS, a python.org universal2 build can make both the arm64 and the Intel app). On Windows, [Inno Setup 6](https://jrsoftware.org/isinfo.php) for the installer (a `.zip` is made without it). On Linux, `appimagetool` on `PATH` for the AppImage (only the `.tar.gz` is made without it).
+
+```bash
+python3 packaging/pywebview/build.py                  # this machine's architecture
+python3 packaging/pywebview/build.py --arch x86_64    # macOS: Intel build (via Rosetta)
+python3 packaging/pywebview/build.py --no-installer   # stop after PyInstaller
+```
+
+- The script creates a virtualenv per architecture in `build/`, installs `requirements.txt` plus `packaging/pywebview/requirements-build.txt`, runs PyInstaller with `foxlogin.spec`, then makes the installer in `dist/`.
+- Run it from source without packaging: `pip3 install -r requirements.txt -r packaging/pywebview/requirements-build.txt`, then `python3 packaging/pywebview/foxlogin.py` (`--server` for the API only).
+- Optional macOS signing: set `FOXLOGIN_SIGN_ID` to a "Developer ID Application" identity (ad-hoc otherwise) and `FOXLOGIN_NOTARY_PROFILE` to a `notarytool` keychain profile to notarize.
+- The icon is drawn by `packaging/pywebview/make_icons.py` into `packaging/pywebview/assets/`.
+
+### Build with Tauri
+
+Requirements: Python 3.10+, Rust (`rustup`), Node.js 18+. On Linux also `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`.
+
+```bash
+python3 packaging/tauri/build.py            # backend + app + installers for this OS
+python3 packaging/tauri/build.py --backend  # only the PyInstaller backend
+python3 packaging/tauri/smoke_test.py       # checks the packaged backend
+```
+
+- The backend (`packaging/tauri/backend.py`) is built into `packaging/tauri/src-tauri/resources/backend/`, then `npx tauri build` writes the installers to `packaging/tauri/src-tauri/target/release/bundle/`.
+- On macOS, set `CI=true` where Finder cannot be scripted (CI, SSH); otherwise the `.dmg` step waits for Finder and times out.
+- Builds are ad-hoc signed on macOS. For notarized builds set `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID`; on Windows set `bundle.windows.certificateThumbprint` in `tauri.conf.json`.
+
+### CI and releases
+
+`.github/workflows/build.yml` builds both apps on every push to `main` and every pull request: pywebview for macOS arm64/Intel, Windows x64 and Linux x86_64/arm64, Tauri for macOS arm64/Intel, Windows x64 and Linux x86_64. Each build runs a smoke test and uploads its installers as workflow artifacts.
+
+To publish a release:
+1. Set the new version in `app/core.py`, `packaging/pywebview/foxlogin.spec`, `packaging/pywebview/windows/foxlogin.iss`, `packaging/tauri/package.json`, `packaging/tauri/src-tauri/Cargo.toml` and `packaging/tauri/src-tauri/tauri.conf.json`.
+2. Push a tag `vX.Y.Z`. CI checks it matches `app/core.py`, then publishes one GitHub Release with both sets of installers (the Tauri ones are named `FoxLogin-Tauri_…`).
 
 ## Project layout
 
@@ -245,6 +284,9 @@ FoxLogin/
 ├── run.py               # entry point: python3 run.py -> http://127.0.0.1:8765
 ├── start.command        # macOS double-click launcher
 ├── requirements.txt
+├── packaging/
+│   ├── pywebview/       # desktop app with a pywebview window (build.py, PyInstaller spec, installers)
+│   └── tauri/           # desktop app with a Tauri shell (backend.py, src-tauri/, build.py)
 ├── app/
 │   ├── server.py        # FastAPI app: UI, REST API, BiDi websocket proxy
 │   ├── core.py          # profile storage, fingerprint generation, Camoufox launch options

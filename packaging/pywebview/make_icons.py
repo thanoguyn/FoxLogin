@@ -1,6 +1,6 @@
 """Draw the FoxLogin app icon and export .icns (macOS), .ico (Windows), .png (Linux).
 
-    python3 packaging/make_icons.py
+    python3 packaging/pywebview/make_icons.py
 """
 import shutil
 import subprocess
