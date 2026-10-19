@@ -138,7 +138,8 @@ def get_settings() -> Dict[str, Any]:
     tmpl = {k: copy.deepcopy(DEFAULT_PROFILE[k]) for k in TEMPLATE_KEYS}
     tmpl["os"] = host_os()
     tmpl = _merge(tmpl, s.get("defaults", {}))
-    return {"defaults": tmpl, "browser": s.get("browser", ""), "api_token": s.get("api_token", "")}
+    return {"defaults": tmpl, "browser": s.get("browser", ""), "api_token": s.get("api_token", ""),
+            "update_check": s.get("update_check", True)}
 
 
 def save_settings(changes: Dict[str, Any]) -> Dict[str, Any]:
@@ -149,7 +150,7 @@ def save_settings(changes: Dict[str, Any]) -> Dict[str, Any]:
     if "defaults" in changes:
         d = {k: v for k, v in changes["defaults"].items() if k in TEMPLATE_KEYS}
         cur["defaults"] = _merge(cur.get("defaults", {}), d)
-    for k in ("browser", "api_token"):
+    for k in ("browser", "api_token", "update_check"):
         if k in changes:
             cur[k] = changes[k]
     _write_json(DATA / "settings.json", cur)

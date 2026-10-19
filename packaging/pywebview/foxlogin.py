@@ -12,6 +12,7 @@ import sys
 import warnings
 
 warnings.filterwarnings("ignore")
+os.environ["FOXLOGIN_SHELL"] = "pywebview"   # which release file updates this app (app/updater.py)
 
 # From source the app package sits three levels up; desktop.py sits next to this file
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))

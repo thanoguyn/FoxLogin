@@ -13,6 +13,7 @@ import sys
 import warnings
 
 warnings.filterwarnings("ignore")
+os.environ["FOXLOGIN_SHELL"] = "tauri"   # which release file updates this app (app/updater.py)
 
 # From source (python3 packaging/tauri/backend.py) the app package sits two levels up
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))

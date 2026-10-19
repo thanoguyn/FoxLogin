@@ -41,6 +41,7 @@ You can also package it as a desktop app (macOS, Windows, Linux) that installs l
 - **Browser-core manager.** Install, switch and remove Camoufox versions, either as the global default or per profile.
 - **GoLogin-compatible REST API.** `POST /browser/start-profile` returns a `wsUrl` that Puppeteer, Selenium 4 and other WebDriver BiDi clients can connect to.
 - **Browsers survive a server restart.** Browsers keep running when the server stops, and the server picks them up again when it starts.
+- **App updates from GitHub Releases.** The desktop app tells you when a new release is out and can install it for you.
 
 ## Requirements
 
@@ -113,6 +114,10 @@ host:port
 - **Defaults for new profiles.** OS, language, timezone, geolocation, WebRTC, resolution, every mask, and extensions.
 - **Browser core.** Lists the installed Camoufox builds and has *Check for updates*. You can install a newer or older build (about 1.2 GB each), choose the default, or remove unused builds. Each profile can also pin its own build.
 - **API token** (optional). When it is set, every `/api/v1` and `/browser` call needs `Authorization: Bearer <token>` or `?token=<token>`.
+- **FoxLogin updates.** Shows the installed version and checks GitHub Releases for a newer one (on start, unless *Check on start* is off, or with *Check now*). How the update is installed depends on the copy:
+  - **Windows installer, Linux AppImage:** *Update now* downloads the release, checks its SHA-256, then FoxLogin closes, installs it and opens again. On Windows, running profiles are closed first, because the installer replaces the program they run from. On Linux they keep running.
+  - **macOS:** the `.dmg` is saved to Downloads and opened, and FoxLogin quits so you can drag the new FoxLogin into Applications. Running profiles stay open. If Finder says FoxLogin is in use, close the profile windows and drag again.
+  - **From source, `.tar.gz`, `.deb` or `.msi` installs:** a link to the release page (`git pull` for a checkout).
 - **Reset to recommended** restores the recommended defaults. Inside a profile, **Reset to defaults** applies the current defaults to that profile. It keeps the name, proxy, OS and device.
 
 ### Profile badge
@@ -290,6 +295,7 @@ FoxLogin/
 ├── app/
 │   ├── server.py        # FastAPI app: UI, REST API, BiDi websocket proxy
 │   ├── core.py          # profile storage, fingerprint generation, Camoufox launch options
+│   ├── updater.py       # app updates from GitHub Releases
 │   ├── runner.py        # runs one profile's browser in its own process
 │   └── static/          # single-page UI (index.html, app.js, style.css) and fptest.html
 ├── tests/

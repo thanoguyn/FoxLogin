@@ -132,6 +132,73 @@ function renderDownload() {
 }
 const cmpVer = (x, y) => x.localeCompare(y, undefined, { numeric: true });
 
+/* ------------------------------------------------- app updates */
+// FoxLogin's own releases on GitHub (app/updater.py): checked on start unless
+// turned off in Settings. "Later" hides the banner until a newer release.
+const mb = n => Math.round(n / 1048576);
+const updBusy = () => ['downloading', 'installing'].includes(S.update?.job?.state);
+async function checkUpdate(force) {
+  try { S.update = await api('/api/update' + (force ? '?force=true' : '')); } catch (e) { S.update = { error: e.message }; }
+  renderUpdate();
+  if (updBusy()) pollUpdate();
+}
+function updButton(u) {
+  return u.mode === 'link' ? `<a class="chip" href="${esc(u.url)}" target="_blank">Download</a>`
+    : `<button class="chip" data-upd="start">${u.mode === 'open' ? 'Download installer' : 'Update now'}</button>`;
+}
+function renderUpdate() {
+  const u = S.update; const j = (u && u.job) || {}; const el = $('#updBanner');
+  el.hidden = !u || !(updBusy() || (u.newer && store.get('fl.updLater') !== u.latest));
+  if (!el.hidden) {
+    if (j.state === 'downloading') {
+      const pct = j.total ? Math.floor(j.done * 100 / j.total) : 0;
+      el.innerHTML = `<b>Downloading FoxLogin ${esc(j.version)}</b>
+        <div class="bar"><span style="width:${pct}%"></span></div><span>${pct}% · ${mb(j.done)}/${mb(j.total)} MB</span>`;
+    } else if (j.state === 'installing') {
+      el.innerHTML = j.mode === 'open'
+        ? `<b>The FoxLogin ${esc(j.version)} installer is open.</b><span>FoxLogin closes now: drag FoxLogin into Applications (Replace), then open it again.</span>`
+        : `<b>Installing FoxLogin ${esc(j.version)}…</b><span>FoxLogin closes and opens again by itself.</span>`;
+    } else {
+      el.innerHTML = `<b>FoxLogin ${esc(u.latest)} is available</b>
+        <span class="grow ${j.state === 'failed' ? 'warn' : 'muted'}">${j.state === 'failed' ? 'Update failed: ' + esc(j.error) : 'You have ' + esc(u.current) + '.'}</span>
+        <a href="${esc(u.url)}" target="_blank">What's new</a> ${updButton(u)}
+        <button class="chip" data-upd="later">Later</button>`;
+    }
+  }
+  const st = $('#updStatus');
+  if (st) {
+    st.innerHTML = !u ? 'Not checked yet.'
+      : u.error ? `<span class="warn">Could not check: ${esc(u.error)}</span>`
+      : updBusy() || u.newer ? `Version <b>${esc(u.latest)}</b> is available. ${updBusy() ? '' : updButton(u)}`
+      : `Up to date (latest release: ${esc(u.latest)}).`;
+  }
+}
+async function startUpdate() {
+  const u = S.update;
+  const running = S.profiles.filter(p => p.state === 'running').length;
+  const n = `${running} running profile${running > 1 ? 's' : ''}`;
+  const stop = u.os === 'windows' && running > 0;
+  const text = u.mode === 'open'
+    ? `FoxLogin ${u.latest} is downloaded to your Downloads folder and its installer opens. FoxLogin then quits: drag FoxLogin into Applications, choose Replace, and open it again.`
+      + (running ? ` If Finder says FoxLogin is in use, close the profile windows and drag again.` : '')
+    : `FoxLogin ${u.latest} is downloaded and installed, then FoxLogin opens again by itself.`
+      + (stop ? ` The installer replaces the program that profiles run from, so the ${n} will be closed.` : '');
+  if (!(await ask(text, stop ? 'Close profiles and update' : 'Update'))) return;
+  try { S.update.job = await api('/api/update/start', { body: { confirm: true, stop } }); } catch (e) { return toast(e.message, true); }
+  renderUpdate(); pollUpdate();
+}
+async function pollUpdate() {
+  clearTimeout(S.updTimer);
+  try { S.update = await api('/api/update'); } catch (e) { return; /* quit to install */ }
+  renderUpdate();
+  if (updBusy()) S.updTimer = setTimeout(pollUpdate, 1000);
+}
+function onUpdateClick(e) {
+  const b = e.target.closest('[data-upd]'); if (!b) return;
+  if (b.dataset.upd === 'start') startUpdate();
+  if (b.dataset.upd === 'later') { store.set('fl.updLater', S.update.latest); renderUpdate(); }
+}
+
 async function firstRunCheck() {
   try { S.browsers = await api('/api/browsers'); } catch (e) { return; }
   if (!S.browsers.installed.length && !S.download) browserPickModal();
@@ -1025,6 +1092,13 @@ function renderSettings() {
     </div>
     ${jobs.length ? `<h2 style="font-size:15px">Jobs</h2><div class="card">${jobs.map(([k, j]) => `<div class="ver-row"><div><b>${esc(k)}</b> <span class="tag ${j.state === 'failed' ? 'amber' : 'green'}">${esc(j.state)}</span></div></div><div class="joblog">${esc(j.log)}</div>`).join('')}</div>` : ''}
 
+    <h2>FoxLogin updates</h2>
+    <div class="card"><div class="ver-row">
+      <div><b>FoxLogin ${esc(S.meta.version)}</b><div class="sub" id="updStatus"></div></div>
+      <label class="sub" style="display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" id="updAuto" ${S.settings.update_check !== false ? 'checked' : ''}> Check on start</label>
+      <button class="chip" id="btnUpdCheck">Check now</button>
+    </div></div>
+
     <h2>API</h2>
     <p>Automation endpoints live at <code>${location.origin}/api/v1</code>. Set a token to require <code>Authorization: Bearer &lt;token&gt;</code>.</p>
     <div class="card"><div class="frow"><label>API token</label><div><input type="text" id="apiToken" value="${esc(S.settings.api_token)}" placeholder="empty = no token (localhost only)"></div><div class="hint"><button class="chip" id="btnGenToken">Generate</button></div></div></div>
@@ -1035,6 +1109,13 @@ function renderSettings() {
     S.settings = await api('/api/settings/reset', { method: 'POST' }); renderSettings(); toast('Defaults reset to recommended');
   };
   $('#showPre').onchange = e => { store.set('fl.showPre', e.target.checked); renderSettings(); };
+  renderUpdate();
+  $('#updAuto').onchange = async e => { S.settings = await api('/api/settings', { method: 'PATCH', body: { update_check: e.target.checked } }); };
+  $('#btnUpdCheck').onclick = async e => {
+    e.target.disabled = true; await checkUpdate(true); e.target.disabled = false;
+    if (S.update.newer) store.set('fl.updLater', null);
+    renderUpdate();
+  };
   $('#apiToken').onchange = async e => { S.settings = await api('/api/settings', { method: 'PATCH', body: { api_token: e.target.value.trim() } }); toast('API token saved'); };
   $('#btnGenToken').onclick = async () => {
     const t = [...crypto.getRandomValues(new Uint8Array(16))].map(v => v.toString(16).padStart(2, '0')).join('');
@@ -1246,6 +1327,8 @@ function bind() {
       onFormClick(e);
     });
   }
+  $('#updBanner').addEventListener('click', onUpdateClick);
+  $('#settingsBody').addEventListener('click', onUpdateClick);
   $('#btnRandom').onclick = randomFingerprint;
   $('#btnClose').onclick = async () => { await flushSave(); closeDrawer(); };
   $('#scrim').onclick = async () => { await flushSave(); closeDrawer(); };
@@ -1273,5 +1356,6 @@ function bind() {
   go(['profiles', 'proxies', 'settings', 'api'].includes(page) ? page : 'profiles');
   await pollStates();
   firstRunCheck();
+  if (S.settings.update_check !== false) checkUpdate();
   setInterval(pollStates, 2000);
 })();

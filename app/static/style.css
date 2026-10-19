@@ -100,6 +100,10 @@ tr:hover .settings-link { visibility: visible; }
 .dl-banner .bar { flex: 0 0 180px; height: 6px; border-radius: 3px; background: #f0dfb8; overflow: hidden; }
 .dl-banner .bar span { display: block; height: 100%; background: #d9a441; transition: width .4s; }
 .dl-banner .bar.indef span { width: 30% !important; animation: indef 1.2s ease-in-out infinite; }
+.upd-banner { background: #eef4ff; border-bottom-color: #cfdcf5; color: #1d3f78; }
+.upd-banner .bar { background: #cfdcf5; }
+.upd-banner .bar span { background: #3a6fd8; }
+.upd-banner .grow { flex: 1; }
 @keyframes indef { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 .ver-pick { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
 .modal-card .ver-pick label { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--line); margin: 0; cursor: pointer; }

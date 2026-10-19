@@ -11,7 +11,7 @@ ROOT = Path(SPECPATH).parent.parent
 
 datas = [(str(ROOT / "app" / "static"), "app/static")]
 binaries = []
-hiddenimports = ["app.server", "app.runner", "app.core"]
+hiddenimports = ["app.server", "app.runner", "app.core", "app.updater"]
 hiddenimports += collect_submodules("uvicorn")
 
 # Packages that ship data files (fingerprint models, locales, the Playwright

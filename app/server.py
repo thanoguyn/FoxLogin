@@ -21,7 +21,7 @@ from fastapi import Body, FastAPI, HTTPException, Request, WebSocket
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app import core
+from app import core, updater
 
 STATIC = Path(__file__).parent / "static"
 LOGS = core.DATA / "logs"
@@ -248,6 +248,39 @@ def meta():
         "version": core.VERSION,
         "dataDir": str(core.DATA),
     }
+
+
+# ------------------------------------------------------------------ app updates
+
+@app.get("/api/update")
+def update_info(force: bool = False):
+    return updater.check(force)
+
+
+@app.post("/api/update/start")
+def update_start(data: Dict[str, Any] = Body(default={})):
+    """Download the latest release and install it; the app quits and restarts.
+
+    On Windows the installer replaces the program that running profiles run
+    from, so they must be stopped first (`stop: true`). `confirm: true` makes
+    the body JSON, which a cross-site form post cannot send without a preflight."""
+    if data.get("confirm") is not True:
+        raise HTTPException(400, "confirm: true is required")
+    running = [pid for pid, s in states()["states"].items() if s == "running"]
+    if core.host_os() == "windows" and running and data.get("stop") is not True:
+        raise HTTPException(409, f"Stop the {len(running)} running profile(s) first")
+
+    def before_quit():
+        if core.host_os() == "windows":   # also any started during the download
+            for pid, s in states()["states"].items():
+                if s == "running":
+                    stop_profile(pid)
+        _shutdown()
+
+    try:
+        return updater.start(before_quit)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
 
 
 # --------------------------------------------------------------------- settings
