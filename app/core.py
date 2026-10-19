@@ -249,6 +249,7 @@ def reset_profile(pid: str) -> Dict[str, Any]:
 
 def delete_profile(pid: str) -> None:
     shutil.rmtree(_pdir(pid), ignore_errors=True)
+    shutil.rmtree(browser_copy_dir(pid), ignore_errors=True)
 
 
 def clone_profile(pid: str) -> Dict[str, Any]:
@@ -930,9 +931,40 @@ def _badged_icns(src: Path, label: str, out: Path) -> None:
         subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(out)], check=True, capture_output=True)
 
 
+GOOGLE_ENGINE = {
+    "Name": "Google",
+    "Description": "Google Search",
+    "Alias": "",
+    "Method": "GET",
+    "URLTemplate": "https://www.google.com/search?q={searchTerms}",
+}
+
+
+def _google_default(policies: Path) -> None:
+    """Camoufox ships with a search engine called "None" that points at 127.0.0.1,
+    so anything typed in the address bar went to localhost. Make Google the default."""
+    doc = json.loads(policies.read_text())
+    eng = doc.setdefault("policies", {}).setdefault("SearchEngines", {})
+    eng["Remove"] = [n for n in eng.get("Remove", []) if n != "Google"]
+    eng["Add"] = [GOOGLE_ENGINE]
+    eng["Default"] = "Google"
+    policies.write_text(json.dumps(doc, indent=2))
+
+
+def browser_copy_dir(pid: str) -> Path:
+    """Where a profile's private browser copy lives (macOS).
+
+    Not under the data folder: that is usually inside ~/Documents, which macOS
+    protects, and its font service then cannot read the fonts bundled with the
+    browser. The browser falls back to same-named system fonts with different
+    glyph tables and the text comes out garbled (seen with Windows profiles)."""
+    return Path.home() / "Library" / "Caches" / "FoxLogin" / "browsers" / pid
+
+
 def dock_app(p: Dict[str, Any]) -> Optional[str]:
-    """Executable of a private copy of this profile's Camoufox build with the badge
-    drawn into its icon, or None (macOS only; no badge, or the copy failed).
+    """Executable of a private copy of this profile's Camoufox build, or None (macOS
+    only; None means run the shared build). The copy has Google as its default
+    search engine and, when the profile has a badge, the badge drawn into its icon.
 
     The Dock does not render the badge text Camoufox sets on its own tile, but it
     always draws the app bundle's icon. A copy per profile also gives every
@@ -946,8 +978,6 @@ def dock_app(p: Dict[str, Any]) -> Optional[str]:
     if sys.platform != "darwin":
         return None
     label = dock_label(p)
-    if not label:
-        return None
     try:
         from camoufox.multiversion import find_installed_version
         from camoufox.pkgman import launch_path
@@ -955,33 +985,36 @@ def dock_app(p: Dict[str, Any]) -> Optional[str]:
         spec = browser_spec(p)
         exe = Path(launch_path(find_installed_version(spec) if spec else None)).resolve()
         src = exe.parents[2]                                  # .../Camoufox.app
-        dest = _pdir(p["id"]) / "dock" / "Camoufox.app"
+        shutil.rmtree(_pdir(p["id"]) / "dock", ignore_errors=True)   # older versions kept the copy in the data folder
+        dest = browser_copy_dir(p["id"]) / "Camoufox.app"
         stamp = dest.parent / "stamp"
         cfg_mtime = (src / "Contents/Resources/camoufox.cfg").stat().st_mtime   # changes with the badge hook
-        key = f"v2|{src}|{(src / 'Contents/Info.plist').stat().st_mtime}|{cfg_mtime}|{label}"
+        key = f"v3|{src}|{(src / 'Contents/Info.plist').stat().st_mtime}|{cfg_mtime}|{label}"
         if not (stamp.exists() and stamp.read_text() == key and (dest / "Contents/MacOS/camoufox").exists()):
             shutil.rmtree(dest.parent, ignore_errors=True)
             dest.parent.mkdir(parents=True)
             if subprocess.run(["cp", "-cR", str(src), str(dest)], capture_output=True).returncode != 0:
                 shutil.rmtree(dest, ignore_errors=True)       # not APFS: plain copy
                 shutil.copytree(src, dest, symlinks=True)
-            info = dest / "Contents/Info.plist"
-            plist = plistlib.loads(info.read_bytes())
-            plist["CFBundleIdentifier"] = "org.mozilla.camoufox." + re.sub(r"[^A-Za-z0-9]", "", p["id"])
-            plist["CFBundleDisplayName"] = plist["CFBundleName"] = f"Camoufox {label}"
-            plist.pop("CFBundleIconName", None)       # macOS prefers the asset catalog icon over firefox.icns
-            (dest / "Contents/Resources/Assets.car").unlink(missing_ok=True)
-            info.write_bytes(plistlib.dumps(plist))
-            icon = dest / "Contents/Resources" / plist.get("CFBundleIconFile", "firefox.icns")
-            if icon.suffix != ".icns":
-                icon = icon.with_suffix(".icns")
-            icon.unlink()
-            _badged_icns(src / "Contents/Resources" / icon.name, label, icon)
+            _google_default(dest / "Contents/Resources/distribution/policies.json")
+            if label:
+                info = dest / "Contents/Info.plist"
+                plist = plistlib.loads(info.read_bytes())
+                plist["CFBundleIdentifier"] = "org.mozilla.camoufox." + re.sub(r"[^A-Za-z0-9]", "", p["id"])
+                plist["CFBundleDisplayName"] = plist["CFBundleName"] = f"Camoufox {label}"
+                plist.pop("CFBundleIconName", None)           # macOS prefers the asset catalog icon over firefox.icns
+                (dest / "Contents/Resources/Assets.car").unlink(missing_ok=True)
+                info.write_bytes(plistlib.dumps(plist))
+                icon = dest / "Contents/Resources" / plist.get("CFBundleIconFile", "firefox.icns")
+                if icon.suffix != ".icns":
+                    icon = icon.with_suffix(".icns")
+                icon.unlink()
+                _badged_icns(src / "Contents/Resources" / icon.name, label, icon)
             stamp.write_text(key)
         return str(dest / "Contents/MacOS/camoufox")
     except Exception as e:
-        print("dock icon failed:", e, file=sys.stderr)
-        shutil.rmtree(_pdir(p["id"]) / "dock", ignore_errors=True)
+        print("browser copy failed:", e, file=sys.stderr)
+        shutil.rmtree(browser_copy_dir(p["id"]), ignore_errors=True)
         return None
 
 
