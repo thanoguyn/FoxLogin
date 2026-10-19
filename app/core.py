@@ -14,6 +14,7 @@ import gzip
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -774,6 +775,18 @@ def import_profiles(text: str, template: Optional[Dict[str, Any]] = None) -> Dic
 
 
 # --------------------------------------------------------------- browser builds
+
+def browser_installed() -> bool:
+    """Is any Camoufox build installed? (none on a fresh machine)"""
+    from camoufox.multiversion import list_installed
+
+    return bool(list_installed())
+
+
+def version_key(v: str) -> Tuple[Any, ...]:
+    """Sort key for "156.0.1-beta.36": numbers compare as numbers."""
+    return tuple((0, int(x)) if x.isdigit() else (1, x) for x in re.split(r"[.-]", v))
+
 
 def browser_versions() -> Dict[str, Any]:
     """Installed Camoufox builds and the ones the repositories offer."""
