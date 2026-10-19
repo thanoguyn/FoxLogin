@@ -15,10 +15,12 @@ warnings.filterwarnings("ignore")
 def _std_streams() -> None:
     # Windowed builds start with no sys.stdout/stderr. Child modes get their
     # output redirected to a log by the parent, so reattach to those handles.
+    # UTF-8, not the Windows ANSI code page: rich's spinner (U+280B) and
+    # other non-ASCII output would otherwise raise UnicodeEncodeError.
     for name, fd in (("stdout", 1), ("stderr", 2)):
         if getattr(sys, name) is None:
             try:
-                setattr(sys, name, open(fd, "w", buffering=1, closefd=False))
+                setattr(sys, name, open(fd, "w", buffering=1, closefd=False, encoding="utf-8", errors="replace"))
             except OSError:
                 setattr(sys, name, open(os.devnull, "w"))
 
