@@ -5,7 +5,7 @@ name: Build desktop app
 #     macOS arm64 + Intel (.dmg), Windows x64 (.exe, also runs on Windows 11 ARM),
 #     Linux x86_64 + arm64 (.AppImage + .tar.gz).
 #   tauri: Tauri shell (packaging/tauri) for macOS arm64 + Intel, Windows x64, Linux x64.
-# Pushing a tag like v1.0.1 also publishes both sets as one GitHub Release.
+# Pushing a tag like v1.0.2 also publishes both sets as one GitHub Release.
 on:
   push:
     branches: [main]

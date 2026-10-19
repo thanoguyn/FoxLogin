@@ -1,6 +1,6 @@
 [package]
 name = "foxlogin"
-version = "1.0.1"
+version = "1.0.2"
 description = "FoxLogin desktop app (Tauri shell around the Python backend)"
 license = "MIT"
 edition = "2021"
