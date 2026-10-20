@@ -1182,7 +1182,18 @@ print(info["wsUrl"], info["port"])        # drive it with any WebDriver BiDi cli
 requests.post(f"{API}/profiles/${pid}/stop", headers=H)`);
 }
 
+async function viewSkillModal() {
+  try {
+    const md = await api('/api/skill/SKILL.md');
+    modal('AI Agent Skill · SKILL.md', `
+      <p class="sub" style="margin:0 0 10px">Save as <code>~/.claude/skills/foxlogin/SKILL.md</code> (Claude Code) or import <code>foxlogin.skill</code> in Claude Desktop / claude.ai.</p>
+      <div class="code-wrap"><button class="copy">Copy</button><pre class="code" style="max-height:420px">${esc(md)}</pre></div>`, null, 'Close', true);
+  } catch (e) { toast(e.message, true); }
+}
+
 function renderApi() {
+  const o = location.origin;
+  const tokC = S.settings?.api_token ? ` -H "Authorization: Bearer ${S.settings.api_token}"` : '';
   const eps = [
     ['GET', '/api/v1/profiles', 'List profiles (state, port, proxy, fingerprint settings). Query: folder, q'],
     ['GET', '/api/v1/profiles/{id}', 'One profile, including its automation port while running'],
@@ -1195,18 +1206,39 @@ function renderApi() {
     ['GET', '/api/v1/running', 'Running profiles and their endpoints'],
     ['POST', '/api/v1/profiles/{id}/randomize', 'New realistic random device + fingerprint'],
     ['POST', '/api/v1/profiles/{id}/cookies', 'Queue cookies (JSON array) for the next start'],
+    ['GET', '/api/v1/profiles/{id}/cookies', 'Export saved cookies (JSON array)'],
     ['POST', '/api/v1/profiles/import', '{"text": "name|proxy|notes|folder|os|start_url\\n…"}'],
     ['GET', '/api/v1/proxies', 'Saved proxies with check results'],
     ['POST', '/api/v1/proxies/import', '{"text": "one proxy per line"}'],
     ['POST', '/browser/start-profile', 'GoLogin-compatible: {"profileId"} → {"status", "wsUrl"}'],
     ['POST', '/browser/stop-profile', 'GoLogin-compatible stop'],
+    ['GET', '/api/v1/skill/foxlogin.skill', 'Download the packaged AI agent skill (.skill)'],
+    ['GET', '/api/v1/skill/SKILL.md', 'Download the AI agent skill instructions (SKILL.md)'],
   ];
   $('#apiBody').innerHTML = `
     <h2>API &amp; Automation</h2>
     <p>Local REST API in the style of GoLogin's. Starting a profile through the API opens a WebDriver BiDi endpoint (Firefox's automation protocol) that Puppeteer, Selenium 4 and other BiDi clients can drive. <code>navigator.webdriver</code> stays <code>false</code>. Profiles started with the Run button don't open that port.</p>
+
+    <h2 style="font-size:15px">AI Agent Skill (Claude / Cursor / Antigravity / Codex)</h2>
+    <div class="card" style="padding:14px 16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:260px">
+          <b>foxlogin — Browser Automation Skill</b>
+          <div class="sub">Complete guide for AI agents to manage profiles, proxies, cookies, WebDriver BiDi sessions, and humanized cursor/keyboard input.</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <a class="btn-primary sm" href="/api/skill/foxlogin.skill" download="foxlogin.skill">⬇ Download foxlogin.skill</a>
+          <a class="btn-ghost sm" href="/api/skill/SKILL.md" download="SKILL.md">⬇ Download SKILL.md</a>
+          <button class="chip" id="btnViewSkill" type="button">View / Copy</button>
+        </div>
+      </div>
+      <div class="code-wrap" style="margin-top:10px"><button class="copy">Copy</button><pre class="code" style="margin:0;padding:10px 14px">mkdir -p ~/.claude/skills/foxlogin &amp;&amp; curl -s${tokC} ${o}/api/skill/SKILL.md -o ~/.claude/skills/foxlogin/SKILL.md</pre></div>
+    </div>
+
     <div class="card">${eps.map(([m, p, d]) => `<div class="ep"><span class="m">${m}</span><code>${esc(p)}</code><span class="d">${esc(d)}</span></div>`).join('')}</div>
     ${codeBlocks()}
     <p class="sub" style="margin-top:14px">Playwright's <code>connect()</code> speaks its own Firefox protocol and can't attach to a running profile; use Puppeteer or another WebDriver BiDi client.</p>`;
+  $('#btnViewSkill').onclick = viewSkillModal;
 }
 
 /* ================================================================ events */

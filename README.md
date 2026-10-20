@@ -140,7 +140,7 @@ Stock Camoufox has a search engine called "None" that points at 127.0.0.1, so an
 
 ![API page](docs/screenshots/ui-api.png)
 
-This page lists every endpoint, with ready-to-copy code snippets that already contain the selected profile's ID.
+This page lists every endpoint, with ready-to-copy code snippets that already contain the selected profile's ID, and lets you download the **AI Agent Skill** (`foxlogin.skill` or `SKILL.md`) for Claude Code, Claude Desktop, Antigravity, Cursor and Codex.
 
 ## Realistic random fingerprints
 
@@ -250,6 +250,8 @@ Native:
 | POST | `/api/v1/profiles/import` | `{"text": "name\|proxy\|notes\|folder\|os\|start_url\n..."}` |
 | GET | `/api/v1/proxies` | Saved proxies with check results |
 | POST | `/api/v1/proxies/import` | `{"text": "one proxy per line"}` |
+| GET | `/api/v1/skill/foxlogin.skill` | Download the packaged AI agent skill (`.skill` zip) |
+| GET | `/api/v1/skill/SKILL.md` | Download the AI agent skill instructions (`SKILL.md`) |
 
 ## Desktop app packaging
 

@@ -177,9 +177,10 @@ tr:hover .dots { visibility: visible; }
 .icon-btn { border: 0; background: none; width: 30px; height: 30px; border-radius: 7px; color: #555; }
 .icon-btn:hover { background: #ececec; }
 .icon-btn.sm { width: 20px; height: 20px; line-height: 1; }
-.btn-primary { border: 0; background: var(--green); color: #fff; border-radius: 7px; padding: 7px 16px; }
+.btn-primary { border: 0; background: var(--green); color: #fff; border-radius: 7px; padding: 7px 16px; text-decoration: none; }
 .btn-primary:hover { background: var(--green-dark); }
-.btn-ghost { border: 1px solid var(--line-strong); background: #fff; border-radius: 7px; padding: 7px 16px; }
+.btn-ghost { border: 1px solid var(--line-strong); background: #fff; color: var(--text); border-radius: 7px; padding: 7px 16px; text-decoration: none; }
+.btn-ghost:hover { background: var(--hover); }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.25); z-index: 40; display: grid; place-items: center; }
 .modal-card { background: #fff; border-radius: 12px; width: 460px; max-width: calc(100vw - 32px); padding: 20px; box-shadow: var(--shadow); }
 .modal-card h3 { margin: 0 0 14px; font-size: 16px; }

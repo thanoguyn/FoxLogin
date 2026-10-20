@@ -246,6 +246,31 @@ def fptest():
     return FileResponse(STATIC / "fptest.html")
 
 
+@app.get("/api/skill/SKILL.md")
+@app.get("/api/v1/skill/SKILL.md")
+def download_skill_md():
+    """Download the FoxLogin automation skill markdown file (SKILL.md)."""
+    return FileResponse(STATIC / "SKILL.md", media_type="text/markdown; charset=utf-8", filename="SKILL.md")
+
+
+@app.get("/api/skill/foxlogin.skill")
+@app.get("/api/v1/skill/foxlogin.skill")
+def download_skill_pkg():
+    """Download the packaged .skill archive (zip containing foxlogin/SKILL.md)."""
+    import io
+    import zipfile
+    from fastapi.responses import Response
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(STATIC / "SKILL.md", "foxlogin/SKILL.md")
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": 'attachment; filename="foxlogin.skill"'},
+    )
+
+
 @app.get("/api/app")
 def app_info():
     """Lets a second launch of the desktop app find this one."""
