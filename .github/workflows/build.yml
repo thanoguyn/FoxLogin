@@ -37,14 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Tag matches the app version
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: bash
-        run: grep -qx "VERSION = \"${GITHUB_REF_NAME#v}\"" app/core.py
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+
+      - name: Tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: python packaging/release.py --check "${GITHUB_REF_NAME#v}"
 
       - name: Linux build dependencies
         if: runner.os == 'Linux'

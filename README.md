@@ -312,9 +312,13 @@ python3 packaging/tauri/smoke_test.py       # checks the packaged backend
 
 `.github/workflows/build.yml` builds both apps on every push to `main` and every pull request: pywebview for macOS arm64/Intel, Windows x64 and Linux x86_64/arm64, Tauri for macOS arm64/Intel, Windows x64 and Linux x86_64. Each build runs a smoke test and uploads its installers as workflow artifacts.
 
-To publish a release:
-1. Set the new version in `app/core.py`, `packaging/pywebview/foxlogin.spec`, `packaging/pywebview/windows/foxlogin.iss`, `packaging/tauri/package.json`, `packaging/tauri/src-tauri/Cargo.toml` and `packaging/tauri/src-tauri/tauri.conf.json`.
-2. Push a tag `vX.Y.Z`. CI checks it matches `app/core.py`, then publishes one GitHub Release with both sets of installers (the Tauri ones are named `FoxLogin-Tauri_…`).
+To publish a release, run on `main` with everything committed:
+
+```bash
+python3 packaging/release.py patch        # or minor, major, or an explicit 1.2.3; --dry-run to preview
+```
+
+It writes the version into `app/core.py`, `packaging/pywebview/foxlogin.spec`, `packaging/pywebview/windows/foxlogin.iss`, `packaging/tauri/package.json` (+ lock), `packaging/tauri/src-tauri/Cargo.toml` (+ lock) and `packaging/tauri/src-tauri/tauri.conf.json`, commits `Release X.Y.Z`, tags `vX.Y.Z` and pushes both. CI runs `release.py --check` against the tag, then publishes one GitHub Release with both sets of installers (the Tauri ones are named `FoxLogin-Tauri_…`). If a tag's build failed before any Release was published, fix the cause and rerun with `--retag` to move the tag.
 
 ## Project layout
 
