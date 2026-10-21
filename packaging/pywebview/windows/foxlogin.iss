@@ -2,7 +2,7 @@
 ; Built by packaging/pywebview/build.py:  iscc /DAppVersion=1.0.0 /DSourceDir=... /DOutputDir=... foxlogin.iss
 
 #ifndef AppVersion
-  #define AppVersion "1.0.3"
+  #define AppVersion "1.0.5"
 #endif
 
 [Setup]

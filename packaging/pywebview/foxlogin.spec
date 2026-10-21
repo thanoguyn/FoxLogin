@@ -10,7 +10,7 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules, copy_metada
 HERE = Path(SPECPATH)
 ROOT = HERE.parent.parent
 ASSETS = HERE / "assets"
-VERSION = os.environ.get("FOXLOGIN_VERSION", "1.0.3")
+VERSION = os.environ.get("FOXLOGIN_VERSION", "1.0.5")
 ARCH = os.environ.get("FOXLOGIN_ARCH") or None
 
 datas = [(str(ROOT / "app" / "static"), "app/static")]
