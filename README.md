@@ -312,13 +312,15 @@ python3 packaging/tauri/smoke_test.py       # checks the packaged backend
 
 `.github/workflows/build.yml` builds both apps on every push to `main` and every pull request: pywebview for macOS arm64/Intel, Windows x64 and Linux x86_64/arm64, Tauri for macOS arm64/Intel, Windows x64 and Linux x86_64. Each build runs a smoke test and uploads its installers as workflow artifacts.
 
-To publish a release, run on `main` with everything committed:
+Every push to `main` publishes a release. The workflow's `version` job runs `packaging/release.py patch` on the newest `main`: it bumps the patch version in every version file, commits `Release X.Y.Z` as `github-actions[bot]`, tags `vX.Y.Z` and pushes both. Both apps are then built from that tag and published as one GitHub Release (the Tauri installers are named `FoxLogin-Tauri_…`). Run `git pull` before your next push to pick up the release commit. Put `[skip release]` in a commit message to build without releasing, or `[skip ci]` to skip the workflow.
+
+For a minor or major release, run the script yourself on `main` with everything committed:
 
 ```bash
-python3 packaging/release.py patch        # or minor, major, or an explicit 1.2.3; --dry-run to preview
+python3 packaging/release.py minor        # or major, patch, or an explicit 1.2.3; --dry-run to preview
 ```
 
-It writes the version into `app/core.py`, `packaging/pywebview/foxlogin.spec`, `packaging/pywebview/windows/foxlogin.iss`, `packaging/tauri/package.json` (+ lock), `packaging/tauri/src-tauri/Cargo.toml` (+ lock) and `packaging/tauri/src-tauri/tauri.conf.json`, commits `Release X.Y.Z`, tags `vX.Y.Z` and pushes both. CI runs `release.py --check` against the tag, then publishes one GitHub Release with both sets of installers (the Tauri ones are named `FoxLogin-Tauri_…`). If a tag's build failed before any Release was published, fix the cause and rerun with `--retag` to move the tag.
+It writes the version into `app/core.py`, `packaging/pywebview/foxlogin.spec`, `packaging/pywebview/windows/foxlogin.iss`, `packaging/tauri/package.json` (+ lock), `packaging/tauri/src-tauri/Cargo.toml` (+ lock) and `packaging/tauri/src-tauri/tauri.conf.json`, commits `Release X.Y.Z`, tags `vX.Y.Z` and pushes both; CI does not bump again for a `Release …` commit. CI runs `release.py --check` against the tag before building. If a tag's build failed before any Release was published, fix the cause and rerun with `--retag` to move the tag.
 
 ## Project layout
 

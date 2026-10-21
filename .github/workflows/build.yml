@@ -5,7 +5,10 @@ name: Build desktop app
 #     macOS arm64 + Intel (.dmg), Windows x64 (.exe, also runs on Windows 11 ARM),
 #     Linux x86_64 + arm64 (.AppImage + .tar.gz).
 #   tauri: Tauri shell (packaging/tauri) for macOS arm64 + Intel, Windows x64, Linux x64.
-# Pushing a tag like v1.0.2 also publishes both sets as one GitHub Release.
+# Every push to main is a release: the version job bumps the patch version, commits
+# "Release X.Y.Z" and tags it, then both sets are built from that tag and published as
+# one GitHub Release. Pushing a tag like v1.0.2 by hand (release.py) does the same.
+# Put [skip release] in the commit message to only build, or [skip ci] to do nothing.
 on:
   push:
     branches: [main]
@@ -14,16 +17,52 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # create releases on tags
+  contents: write   # push the release commit + tag, create releases
 
-# A newer push to the same branch cancels the build still running for the old one
+# Releases from main run one at a time so two pushes never pick the same version;
+# only pull requests cancel their older, still-running build
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}   # empty: build only, no release
+    env:
+      # "Release X.Y.Z" commits come from release.py, which pushes their tag itself
+      AUTO: >-
+        ${{ github.event_name == 'push' && github.ref == 'refs/heads/main'
+            && !startsWith(github.event.head_commit.message, 'Release ')
+            && !contains(github.event.head_commit.message, '[skip release]') }}
+    steps:
+      - uses: actions/checkout@v7
+        if: env.AUTO == 'true'
+        with:
+          ref: main   # the newest main, so the release commit can be pushed on top
+
+      - uses: actions/setup-python@v7
+        if: env.AUTO == 'true'
+        with:
+          python-version: "3.13"
+
+      - id: tag
+        shell: bash
+        run: |
+          if [ "$AUTO" = true ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            # Pushes made with GITHUB_TOKEN don't start another workflow run
+            python packaging/release.py patch
+            echo "tag=v$(sed -nE 's/^VERSION = "(.*)"/\1/p' app/core.py)" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: ${{ matrix.name }}
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,16 +74,20 @@ jobs:
           - { name: linux-x86_64,  os: ubuntu-22.04,      arch: x86_64 }
           - { name: linux-arm64,   os: ubuntu-22.04-arm,  arch: arm64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}   # empty: the commit that triggered the run
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
       - name: Tag matches the app version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.version.outputs.tag != ''
         shell: bash
-        run: python packaging/release.py --check "${GITHUB_REF_NAME#v}"
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: python packaging/release.py --check "${TAG#v}"
 
       - name: Linux build dependencies
         if: runner.os == 'Linux'
@@ -87,7 +130,7 @@ jobs:
           curl -fs -X POST http://127.0.0.1:8799/api/v1/profiles -H 'content-type: application/json' -d '{"name":"ci 1"}' | grep -q '"id"'
           "$APP" --camoufox version > /dev/null 2>&1 || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: FoxLogin-${{ matrix.name }}
           path: dist/*
@@ -95,6 +138,7 @@ jobs:
 
   tauri:
     name: tauri-${{ matrix.name }}
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -107,15 +151,17 @@ jobs:
     env:
       CI: "true"                  # create-dmg: skip the Finder layout step
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.version.outputs.tag }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -141,7 +187,7 @@ jobs:
           npm install
           npx tauri build
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: FoxLogin-Tauri-${{ matrix.name }}
           if-no-files-found: error
@@ -153,11 +199,11 @@ jobs:
             packaging/tauri/src-tauri/target/release/bundle/deb/*.deb
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, tauri]
+    if: needs.version.outputs.tag != ''
+    needs: [version, build, tauri]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -167,7 +213,8 @@ jobs:
           find dist -mindepth 2 -type f -exec mv -t dist {} +
           find dist -mindepth 1 -type d -empty -delete
           cd dist && for f in FoxLogin_*; do mv "$f" "FoxLogin-Tauri_${f#FoxLogin_}"; done
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ needs.version.outputs.tag }}
           files: dist/*
           generate_release_notes: true
